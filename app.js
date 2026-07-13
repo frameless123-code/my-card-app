@@ -347,6 +347,77 @@ function fillFormWithAI(aiText) {
     } catch (e) { console.error("JSON 轉換失敗"); }
 }
 
+// ==========================================
+// ⭐ 新增：資料備份與還原 (匯出/匯入 JSON)
+// ==========================================
+function exportData() {
+    if (businessCards.length === 0) {
+        return alert('⚠️ 目前沒有名片資料可以備份喔！');
+    }
+
+    // 將陣列轉為 JSON 字串，並建立 Blob 檔案物件
+    const dataStr = JSON.stringify(businessCards);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    // 建立隱藏的下載連結並自動點擊
+    const a = document.createElement('a');
+    a.href = url;
+    const date = new Date().toISOString().slice(0, 10); // 取得當前日期
+    a.download = `名片備份_${date}.json`;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const importedCards = JSON.parse(e.target.result);
+
+            // 簡單防呆：確認匯入的是不是陣列格式
+            if (!Array.isArray(importedCards)) throw new Error("檔案格式錯誤");
+
+            // 如果原本已經有名片，詢問要合併還是覆蓋
+            if (businessCards.length > 0) {
+                const confirmMerge = confirm("要將匯入的資料與現有的名片「合併」嗎？\n(按「確定」合併，按「取消」則清空現有資料並完全覆蓋)");
+                if (confirmMerge) {
+                    // 合併邏輯：利用 ID 判斷避免重複匯入同一張
+                    const existingIds = new Set(businessCards.map(c => c.id));
+                    importedCards.forEach(card => {
+                        if (!existingIds.has(card.id)) businessCards.push(card);
+                    });
+                } else {
+                    businessCards = importedCards; // 完全覆蓋
+                }
+            } else {
+                businessCards = importedCards; // 直接寫入
+            }
+
+            // 儲存回 localStorage 並重新渲染畫面
+            localStorage.setItem('cards', JSON.stringify(businessCards));
+            renderCards();
+            updateHomeCount();
+            if (document.getElementById('view-home').classList.contains('active')) renderRecentCards();
+
+            alert('✅ 備份資料還原成功！');
+        } catch (error) {
+            alert('❌ 檔案格式不正確，還原失敗！');
+            console.error(error);
+        } finally {
+            // 清空檔案選取器，確保下次選同一個檔案也能觸發反應
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file);
+}
+
 // 啟動載入
 renderCards();
 renderRecentCards();
