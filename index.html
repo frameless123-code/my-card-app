@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="manifest" href="manifest.json">
+    <title>名片夾 APP</title>
+
+    <!-- 引入 Google Material Symbols (純線條版圖示) -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+
+    <!-- 引入 Cropper.js 影像裁切庫 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
+    <style>
+        :root {
+            /* 旅遊 APP 風格：主視覺紫、清爽淺藍灰背景 */
+            --primary-color: #4A436A; /* 質感深紫 */
+            --secondary-color: #F0F4F8; /* 淺藍灰背景 */
+            --accent-color: #8C7CFF; /* 亮紫色點綴 */
+            --text-color: #2C3E50;
+            --white: #ffffff;
+            --shadow: 0 8px 24px rgba(74, 67, 106, 0.08);
+            --card-radius: 20px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px; /* 留出底部導航列空間 */
+            -webkit-font-smoothing: antialiased;
+        }
+
+        header {
+            padding: 20px 25px 10px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--secondary-color);
+        }
+
+        /* 視圖切換器 */
+        .view-section {
+            display: none;
+            padding: 0 20px;
+        }
+
+            .view-section.active {
+                display: block;
+                animation: fadeIn 0.4s ease;
+            }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- 橫向滑動區塊 (最近新增) --- */
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin: 15px 0 10px;
+            color: var(--primary-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .horizontal-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 15px;
+            padding-bottom: 15px;
+            margin: 0 -20px; /* 讓滑動可以貼齊螢幕邊緣 */
+            padding-left: 20px;
+            padding-right: 20px;
+            scrollbar-width: none; /* Firefox 隱藏捲軸 */
+        }
+
+            .horizontal-scroll::-webkit-scrollbar {
+                display: none; /* Chrome 隱藏捲軸 */
+            }
+
+        .swipe-card {
+            min-width: 160px;
+            background: var(--white);
+            border-radius: var(--card-radius);
+            box-shadow: var(--shadow);
+            flex-shrink: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+            .swipe-card img {
+                width: 100%;
+                height: 90px;
+                object-fit: cover;
+                border-radius: 12px;
+                margin-bottom: 10px;
+                background-color: #eee;
+            }
+
+            .swipe-card h4 {
+                margin: 0 0 5px 0;
+                font-size: 1rem;
+                color: var(--primary-color);
+            }
+
+            .swipe-card p {
+                margin: 0;
+                font-size: 0.8rem;
+                color: #888;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+        /* --- 快速功能鍵 --- */
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .action-btn {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            color: var(--primary-color);
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* --- 表單與一般卡片 --- */
+        .form-card {
+            background-color: var(--white);
+            padding: 20px;
+            border-radius: var(--card-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            background-color: #F8FAFC;
+        }
+
+            input:focus, textarea:focus {
+                outline: none;
+                border-color: var(--accent-color);
+                background-color: var(--white);
+            }
+
+        /* --- 按鈕系統 --- */
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: var(--white);
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            font-weight: bold;
+            width: 100%;
+            font-size: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-secondary {
+            background-color: #E2E8F0;
+            color: var(--primary-color);
+            border: none;
+            padding: 12px;
+            border-radius: 12px;
+            font-weight: bold;
+            width: 100%;
+        }
+
+        /* --- Cropper 裁切區塊 --- */
+        #cropperModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 2000;
+            flex-direction: column;
+        }
+
+        .cropper-workspace {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+            .cropper-workspace img {
+                max-width: 100%;
+                max-height: 70vh;
+            }
+
+        .cropper-toolbar {
+            padding: 20px;
+            display: flex;
+            gap: 10px;
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+        }
+
+        /* --- 底部導航 --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0 25px 0; /* 預留 iPhone 底部安全區 */
+            z-index: 1000;
+            border-radius: 24px 24px 0 0;
+        }
+
+        .nav-item {
+            text-align: center;
+            color: #A0AEC0;
+            font-size: 0.75rem;
+            font-weight: 600;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+            .nav-item.active {
+                color: var(--primary-color);
+            }
+
+        .material-symbols-outlined {
+            font-size: 26px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            background: var(--secondary-color);
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+
+    <header>Discover</header>
+
+    <!-- 1. 首頁 -->
+    <div id="view-home" class="view-section active">
+
+        <!-- 橫向滑動區塊：最近新增 -->
+        <div class="section-title">
+            最近新增 <span style="font-size: 0.8rem; font-weight: normal; color: #888; cursor:pointer;" onclick="switchTab('list')">檢視全部</span>
+        </div>
+        <div class="horizontal-scroll" id="recent-cards-container">
+            <!-- 這裡由 JS 動態生成橫向卡片 -->
+        </div>
+
+        <div class="section-title" style="margin-top: 20px;">快速操作</div>
+        <div class="action-grid">
+            <div class="action-btn" onclick="switchTab('add')">
+                <span class="material-symbols-outlined" style="color: var(--accent-color); font-size: 32px;">add_a_photo</span>
+                新增名片
+            </div>
+            <div class="action-btn" onclick="switchTab('list')">
+                <span class="material-symbols-outlined" style="color: var(--accent-color); font-size: 32px;">folder_shared</span>
+                名片庫 (<span id="total-cards-count">0</span>)
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 名片庫列表 -->
+    <div id="view-list" class="view-section">
+        <div class="form-card" style="padding: 10px; margin-bottom: 15px; display: flex; gap: 10px;">
+            <input type="text" id="searchInput" placeholder="搜尋姓名或公司..." style="flex: 2; border:none; background:transparent;">
+            <span class="material-symbols-outlined" style="color:#aaa; align-self: center;">search</span>
+        </div>
+        <div id="card-list"></div>
+    </div>
+
+    <!-- 3. 新增/編輯名片 -->
+    <div id="view-add" class="view-section">
+        <div class="form-card">
+            <form id="cardForm">
+
+                <!-- 影像辨識區 -->
+                <div class="input-group" style="background: var(--secondary-color); padding: 15px; border-radius: 16px;">
+                    <label>📸 方式一：拍攝或上傳名片</label>
+                    <input type="file" id="photoInput" accept="image/*" style="background: #fff;">
+                    <img id="photoPreview" src="" style="width: 100%; border-radius: 12px; display: none; margin-top: 10px;">
+                    <button type="button" id="aiImageBtn" class="btn-primary" style="display:none; margin-top:10px; background-color: var(--accent-color);" onclick="recognizeCardWithAI()">
+                        <span class="material-symbols-outlined">auto_awesome</span> AI 自動讀圖填寫
+                    </button>
+                </div>
+
+                <!-- 文字辨識區 -->
+                <div class="input-group" style="background: var(--secondary-color); padding: 15px; border-radius: 16px;">
+                    <label>📝 方式二：貼上掃描文字</label>
+                    <textarea id="rawTextInput" rows="3" placeholder="若圖片難以辨識，可在此貼上文字..." style="background: #fff;"></textarea>
+                    <button type="button" id="aiTextBtn" class="btn-secondary" style="margin-top:10px;" onclick="parseTextWithAI()">智慧文字解析</button>
+                </div>
+
+                <div class="section-title">聯絡資訊</div>
+                <div class="input-group">
+                    <label>分類</label>
+                    <select id="category">
+                        <option value="未分類">未分類</option>
+                        <option value="VIP客戶">VIP客戶</option>
+                        <option value="一般客戶">一般客戶</option>
+                        <option value="供應商">供應商</option>
+                    </select>
+                </div>
+                <div class="input-group"><label>姓名 (必填)</label><input type="text" id="name" required></div>
+                <div class="input-group"><label>公司名稱</label><input type="text" id="company"></div>
+                <div class="input-group"><label>職位</label><input type="text" id="title"></div>
+                <div class="input-group"><label>電話</label><input type="tel" id="phone"></div>
+                <div class="input-group"><label>Email</label><input type="email" id="email"></div>
+                <div class="input-group"><label>地址</label><input type="text" id="address"></div>
+                <div class="input-group"><label>備註</label><textarea id="notes" rows="2"></textarea></div>
+
+                <button type="submit" class="btn-primary" id="submitBtn">
+                    <span class="material-symbols-outlined">save</span> 儲存名片
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4. 設定 -->
+    <div id="view-settings" class="view-section">
+        <div class="form-card">
+            <h3 style="margin-top:0; color:var(--primary-color);">系統設定</h3>
+            <div class="input-group">
+                <label>Gemini API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="貼上 AIza 開頭的金鑰">
+            </div>
+            <button class="btn-primary" onclick="saveSettings()">儲存設定</button>
+        </div>
+    </div>
+
+    <!-- ⭐ Cropper.js 專屬的全螢幕裁切彈窗 -->
+    <div id="cropperModal">
+        <div class="cropper-workspace">
+            <img id="imageToCrop" src="">
+        </div>
+        <div class="cropper-toolbar">
+            <button class="btn-secondary" onclick="cancelCrop()">取消</button>
+            <button class="btn-secondary" onclick="rotateCrop()" style="width: 50px;"><span class="material-symbols-outlined">rotate_right</span></button>
+            <button class="btn-primary" onclick="confirmCrop()">確認裁切</button>
+        </div>
+    </div>
+
+    <!-- 底部導航 -->
+    <nav class="bottom-nav">
+        <div class="nav-item active" id="nav-home" onclick="switchTab('home')">
+            <span class="material-symbols-outlined">explore</span>發現
+        </div>
+        <div class="nav-item" id="nav-list" onclick="switchTab('list')">
+            <span class="material-symbols-outlined">view_agenda</span>名片庫
+        </div>
+        <div class="nav-item" id="nav-add" onclick="switchTab('add')">
+            <span class="material-symbols-outlined">add_circle</span>新增
+        </div>
+        <div class="nav-item" id="nav-settings" onclick="switchTab('settings')">
+            <span class="material-symbols-outlined">settings</span>設定
+        </div>
+    </nav>
+
+    <script src="app.js"></script>
+</body>
+</html>
