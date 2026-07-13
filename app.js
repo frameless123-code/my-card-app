@@ -4,6 +4,7 @@
 let businessCards = JSON.parse(localStorage.getItem('cards')) || [];
 let editingId = null;
 let compressedPhotoData = "";
+let originalPhotoData = ""; // 新增這行：用來記錄未裁切的原始高畫質圖片
 let cropper = null; // 新增 Cropper 全域變數
 
 const form = document.getElementById('cardForm');
@@ -81,6 +82,7 @@ document.getElementById('photoInput').addEventListener('change', function (event
 
     const reader = new FileReader();
     reader.onload = function (e) {
+        originalPhotoData = e.target.result; // 新增這行：把原始照片存起來備用
         // 1. 將選取的圖片載入到裁切器的 img 標籤中
         const imageToCrop = document.getElementById('imageToCrop');
         imageToCrop.src = e.target.result;
@@ -126,10 +128,27 @@ function confirmCrop() {
     preview.src = compressedPhotoData;
     preview.style.display = 'block';
 
+    // 新增這兩行：裁切完顯示提示文字
+    const reeditHint = document.getElementById('reeditHint');
+    if (reeditHint) reeditHint.style.display = 'block';
+
     // 顯示 AI 辨識按鈕
     document.getElementById('aiImageBtn').style.display = 'flex';
 }
 
+// 新增這個函數：點擊預覽圖時重新打開裁切器
+function reopenCropper() {
+    if (!originalPhotoData) return;
+    const imageToCrop = document.getElementById('imageToCrop');
+    imageToCrop.src = originalPhotoData;
+    document.getElementById('cropperModal').style.display = 'flex';
+    if (cropper) cropper.destroy();
+    cropper = new Cropper(imageToCrop, {
+        viewMode: 1,
+        autoCropArea: 0.9,
+        background: false,
+    });
+}
 
 // ==========================================
 // 表單狀態管理 (新增 vs 編輯)
@@ -138,6 +157,12 @@ function prepareAddCard() {
     editingId = null;
     form.reset();
     document.getElementById('photoPreview').style.display = 'none';
+
+    // 新增這兩行：清空重裁提示與舊資料
+    const reeditHint = document.getElementById('reeditHint');
+    if (reeditHint) reeditHint.style.display = 'none';
+    originalPhotoData = "";
+
     document.getElementById('photoInput').value = "";
     compressedPhotoData = "";
 
@@ -160,14 +185,18 @@ function editCard(id) {
     document.getElementById('notes').value = card.notes || '';
 
     compressedPhotoData = "";
+    originalPhotoData = card.photo || ""; // 新增這行：讓舊照片也能重新編輯
     const preview = document.getElementById('photoPreview');
+    const reeditHint = document.getElementById('reeditHint'); // 新增這行
 
     if (card.photo) {
         preview.src = card.photo;
         preview.style.display = 'block';
+        if (reeditHint) reeditHint.style.display = 'block'; // 新增這行
         document.getElementById('aiImageBtn').style.display = 'flex';
     } else {
         preview.style.display = 'none';
+        if (reeditHint) reeditHint.style.display = 'none'; // 新增這行
         document.getElementById('aiImageBtn').style.display = 'none';
     }
 

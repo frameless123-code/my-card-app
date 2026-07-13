@@ -214,6 +214,7 @@
             border-radius: 12px;
             font-weight: bold;
             width: 100%;
+            font-size: 1rem;
         }
 
         /* --- Cropper 裁切區塊 --- */
@@ -243,7 +244,8 @@
             }
 
         .cropper-toolbar {
-            padding: 20px;
+            /* 修改這行 padding：增加底部的留白空間 */
+            padding: 20px 20px calc(30px + env(safe-area-inset-bottom)) 20px;
             display: flex;
             gap: 10px;
             background: #fff;
@@ -321,7 +323,8 @@
             </div>
             <div class="action-btn" onclick="switchTab('list')">
                 <span class="material-symbols-outlined" style="color: var(--accent-color); font-size: 32px;">folder_shared</span>
-                名片庫 (<span id="total-cards-count">0</span>)
+                <!-- 修改這裡：加入 <div> 與 <br> 強制在數字前換行 -->
+                <div>名片庫<br>(<span id="total-cards-count">0</span>)</div>
             </div>
         </div>
     </div>
@@ -344,7 +347,9 @@
                 <div class="input-group" style="background: var(--secondary-color); padding: 15px; border-radius: 16px;">
                     <label>📸 方式一：拍攝或上傳名片</label>
                     <input type="file" id="photoInput" accept="image/*" style="background: #fff;">
-                    <img id="photoPreview" src="" style="width: 100%; border-radius: 12px; display: none; margin-top: 10px;">
+                    <!-- 修改圖片標籤，加入 onclick 與游標樣式，並在下方加一行提示 -->
+                    <img id="photoPreview" src="" style="width: 100%; border-radius: 12px; display: none; margin-top: 10px; cursor: pointer;" onclick="reopenCropper()">
+                    <p id="reeditHint" style="display:none; font-size:0.8rem; color:#888; text-align:center; margin:5px 0 0 0;">(點擊圖片可重新裁切)</p>
                     <button type="button" id="aiImageBtn" class="btn-primary" style="display:none; margin-top:10px; background-color: var(--accent-color);" onclick="recognizeCardWithAI()">
                         <span class="material-symbols-outlined">auto_awesome</span> AI 自動讀圖填寫
                     </button>
