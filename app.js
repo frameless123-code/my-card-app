@@ -258,19 +258,38 @@ function renderCards() {
     cardList.innerHTML = '';
     const searchTerm = searchInput.value.toLowerCase();
 
-    const filteredCards = businessCards.filter(card => {
+    // 取得排序條件 (若找不到選單則預設 newest)
+    const sortSelect = document.getElementById('sortSelect');
+    const sortType = sortSelect ? sortSelect.value : 'newest';
+
+    let filteredCards = businessCards.filter(card => {
         return (card.name && card.name.toLowerCase().includes(searchTerm)) ||
             (card.company && card.company.toLowerCase().includes(searchTerm));
     });
 
+    // 執行排序邏輯
+    if (sortType === 'oldest') {
+        filteredCards.sort((a, b) => a.id - b.id);
+    } else if (sortType === 'category') {
+        filteredCards.sort((a, b) => (a.category || '').localeCompare(b.category || ''));
+    } else {
+        filteredCards.sort((a, b) => b.id - a.id); // 預設 newest
+    }
+
     filteredCards.forEach(card => {
         const photoHtml = card.photo ? `<img src="${card.photo}" style="width:70px; height:70px; object-fit:cover; border-radius:12px; margin-right:15px;">` : '';
+
+        // ⭐ 新增：一鍵撥號與信箱 (Click-to-Action) 加上 event.stopPropagation() 防止觸發卡片編輯
+        const phoneHtml = card.phone ? `<a href="tel:${card.phone}" style="color:var(--accent-color); text-decoration:none; margin-right:15px;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">call</span> ${card.phone}</a>` : '';
+        const emailHtml = card.email ? `<a href="mailto:${card.email}" style="color:var(--accent-color); text-decoration:none;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">mail</span> Email</a>` : '';
+        const contactHtml = (phoneHtml || emailHtml) ? `<div style="margin-top:8px; font-size:0.9rem; font-weight:bold;">${phoneHtml}${emailHtml}</div>` : '';
+
         const cardElement = document.createElement('div');
         cardElement.className = 'form-card';
         cardElement.style.display = 'flex';
         cardElement.style.alignItems = 'center';
         cardElement.style.cursor = 'pointer';
-        cardElement.onclick = () => editCard(card.id); // 點擊整張卡片可編輯
+        cardElement.onclick = () => editCard(card.id);
 
         cardElement.innerHTML = `
             ${photoHtml}
@@ -278,8 +297,9 @@ function renderCards() {
                 <span class="badge">${card.category || '未分類'}</span>
                 <h3 style="margin:5px 0 2px 0; color:var(--primary-color);">${card.name}</h3>
                 <p style="margin:0; font-size:0.85rem; color:#888;">${card.company}</p>
+                ${contactHtml}
             </div>
-            <button onclick="deleteCard(${card.id}, event)" style="background:transparent; border:none; color:#FF6B6B; cursor:pointer;">
+            <button onclick="deleteCard(${card.id}, event)" style="background:transparent; border:none; color:#FF6B6B; cursor:pointer; padding: 10px;">
                 <span class="material-symbols-outlined">delete</span>
             </button>
         `;
@@ -470,34 +490,84 @@ function importData(event) {
             if (businessCards.length > 0) {
                 const confirmMerge = confirm("要將匯入的資料與現有的名片「合併」嗎？\n(按「確定」合併，按「取消」則清空現有資料並完全覆蓋)");
                 if (confirmMerge) {
-                    // 合併邏輯：利用 ID 判斷避免重複匯入同一張
                     const existingIds = new Set(businessCards.map(c => c.id));
                     importedCards.forEach(card => {
                         if (!existingIds.has(card.id)) businessCards.push(card);
                     });
                 } else {
-                    businessCards = importedCards; // 完全覆蓋
+                    businessCards = importedCards;
                 }
             } else {
-                businessCards = importedCards; // 直接寫入
+                businessCards = importedCards;
             }
 
-            // 儲存回 localStorage 並重新渲染畫面
+            // ⭐ 新增：自動掃描並建立缺失的分類標籤
+            importedCards.forEach(card => {
+                if (card.category && !categories.includes(card.category)) {
+                    categories.push(card.category);
+                }
+            });
+
+            // 儲存所有更新到 localStorage
             localStorage.setItem('cards', JSON.stringify(businessCards));
+            localStorage.setItem('categories', JSON.stringify(categories)); // 儲存更新後的分類
+
+            // 重新渲染畫面上的所有元素
             renderCards();
             updateHomeCount();
+            renderCategoryOptions(); // 刷新表單下拉選單
+            renderCategoryTags();    // 刷新設定頁面標籤列表
+
             if (document.getElementById('view-home').classList.contains('active')) renderRecentCards();
 
-            alert('✅ 備份資料還原成功！');
+            alert('✅ 備份資料與分類標籤還原成功！');
         } catch (error) {
             alert('❌ 檔案格式不正確，還原失敗！');
             console.error(error);
         } finally {
-            // 清空檔案選取器，確保下次選同一個檔案也能觸發反應
             event.target.value = '';
         }
     };
     reader.readAsText(file);
+}
+
+// ==========================================
+// 匯出為 CSV 格式 (Excel 可讀)
+// ==========================================
+function exportCSV() {
+    if (businessCards.length === 0) {
+        return alert('⚠️ 目前沒有名片資料可以匯出喔！');
+    }
+
+    // 加入 BOM 以解決 Excel 打開 CSV 時的中文亂碼問題
+    let csvContent = "\uFEFF";
+    csvContent += "分類,姓名,公司,職位,電話,Email,地址,備註\n";
+
+    businessCards.forEach(card => {
+        // 處理內容，避免使用者輸入的逗號或換行符號破壞 CSV 格式
+        const row = [
+            card.category || '',
+            card.name || '',
+            card.company || '',
+            card.title || '',
+            card.phone || '',
+            card.email || '',
+            card.address || '',
+            card.notes || ''
+        ].map(field => `"${String(field).replace(/"/g, '""')}"`); // 雙引號跳脫處理
+
+        csvContent += row.join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `聯絡人清單_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // 啟動載入

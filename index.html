@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
+    <!-- 補齊 iOS 專屬 PWA 標籤 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
     <title>名片夾 APP</title>
 
     <!-- 引入 Google Material Symbols (純線條版圖示) -->
@@ -333,6 +337,12 @@
     <div id="view-list" class="view-section">
         <div class="form-card" style="padding: 10px; margin-bottom: 15px; display: flex; gap: 10px;">
             <input type="text" id="searchInput" placeholder="搜尋姓名或公司..." style="flex: 2; border:none; background:transparent;">
+            <!-- 新增排序選單 -->
+            <select id="sortSelect" style="flex: 1; border:none; background:#F0F4F8; padding: 5px; border-radius: 8px; color: var(--primary-color); font-size: 0.85rem;" onchange="renderCards()">
+                <option value="newest">最新加入</option>
+                <option value="oldest">最早加入</option>
+                <option value="category">依分類</option>
+            </select>
             <span class="material-symbols-outlined" style="color:#aaa; align-self: center;">search</span>
         </div>
         <div id="card-list"></div>
@@ -412,6 +422,12 @@
                     還原備份
                     <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(event)">
                 </label>
+
+                <!-- ⭐ 新增 CSV 匯出 -->
+                <div class="action-btn" onclick="exportCSV()" style="color: #e17055; padding: 12px; box-sizing: border-box; height: 100%; justify-content: center; font-size: 1rem; grid-column: span 2; flex-direction: row; gap: 10px;">
+                    <span class="material-symbols-outlined" style="font-size: 24px;">table_view</span>
+                    匯出聯絡人資料 (CSV)
+                </div>
             </div>
         </div>
 
