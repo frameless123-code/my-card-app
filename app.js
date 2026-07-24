@@ -6,6 +6,8 @@ let editingId = null;
 let compressedPhotoData = "";
 let originalPhotoData = ""; // 新增這行：用來記錄未裁切的原始高畫質圖片
 let cropper = null; // 新增 Cropper 全域變數
+// 取得自訂分類，若無則提供預設值
+let categories = JSON.parse(localStorage.getItem('categories')) || ['未分類', 'VIP客戶', '一般客戶', '供應商'];
 
 const form = document.getElementById('cardForm');
 const cardList = document.getElementById('card-list');
@@ -348,6 +350,86 @@ function fillFormWithAI(aiText) {
 }
 
 // ==========================================
+// 自訂分類管理邏輯
+// ==========================================
+
+// 1. 渲染新增/編輯表單中的下拉選單
+function renderCategoryOptions() {
+    const select = document.getElementById('category');
+    if (!select) return;
+    select.innerHTML = '';
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        select.appendChild(option);
+    });
+}
+
+// 2. 渲染設定頁面中的標籤列表
+function renderCategoryTags() {
+    const list = document.getElementById('category-list');
+    if (!list) return;
+    list.innerHTML = '';
+    categories.forEach(cat => {
+        const tag = document.createElement('div');
+        tag.style.cssText = 'background: #E2E8F0; color: var(--text-color); padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; display: flex; align-items: center; gap: 6px;';
+
+        // 「未分類」為系統預設，不提供刪除按鈕
+        tag.innerHTML = `
+            ${cat}
+            ${cat !== '未分類' ? `<span class="material-symbols-outlined" style="font-size: 16px; cursor: pointer; color: #FF6B6B;" onclick="deleteCategory('${cat}')">close</span>` : ''}
+        `;
+        list.appendChild(tag);
+    });
+}
+
+// 3. 新增分類
+function addCategory() {
+    const input = document.getElementById('newCategoryInput');
+    const newCat = input.value.trim();
+
+    if (!newCat) return;
+    if (categories.includes(newCat)) return alert('⚠️ 此分類已經存在囉！');
+
+    categories.push(newCat);
+    localStorage.setItem('categories', JSON.stringify(categories));
+    input.value = ''; // 清空輸入框
+
+    renderCategoryOptions();
+    renderCategoryTags();
+}
+
+// 4. 刪除分類
+function deleteCategory(cat) {
+    if (cat === '未分類') return;
+
+    if (confirm(`確定要刪除「${cat}」分類嗎？\n(原本屬於此分類的名片，將會自動被歸為「未分類」)`)) {
+        // 從陣列移除並存檔
+        categories = categories.filter(c => c !== cat);
+        localStorage.setItem('categories', JSON.stringify(categories));
+
+        // 將現有被刪除分類的名片，洗回「未分類」
+        let modified = false;
+        businessCards.forEach(card => {
+            if (card.category === cat) {
+                card.category = '未分類';
+                modified = true;
+            }
+        });
+
+        // 如果有名片被修改到，就重新存檔並刷新列表
+        if (modified) {
+            localStorage.setItem('cards', JSON.stringify(businessCards));
+            renderCards();
+        }
+
+        renderCategoryOptions();
+        renderCategoryTags();
+    }
+}
+
+// ==========================================
 // ⭐ 新增：資料備份與還原 (匯出/匯入 JSON)
 // ==========================================
 function exportData() {
@@ -419,6 +501,10 @@ function importData(event) {
 }
 
 // 啟動載入
+
+renderCategoryOptions(); // 加入這行
+renderCategoryTags();    // 加入這行
+
 renderCards();
 renderRecentCards();
 updateHomeCount();

@@ -302,7 +302,7 @@
 </head>
 <body>
 
-    <header>Discover</header>
+    <header>Business Card</header>
 
     <!-- 1. 首頁 -->
     <div id="view-home" class="view-section active">
@@ -366,10 +366,7 @@
                 <div class="input-group">
                     <label>分類</label>
                     <select id="category">
-                        <option value="未分類">未分類</option>
-                        <option value="VIP客戶">VIP客戶</option>
-                        <option value="一般客戶">一般客戶</option>
-                        <option value="供應商">供應商</option>
+                        <!-- 這裡改由 JS 動態生成 -->
                     </select>
                 </div>
                 <div class="input-group"><label>姓名 (必填)</label><input type="text" id="name" required></div>
@@ -415,6 +412,18 @@
                     還原備份
                     <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(event)">
                 </label>
+            </div>
+        </div>
+
+        <!-- ⭐ 新增：標籤分類管理 -->
+        <div class="form-card">
+            <h3 style="margin-top:0; color:var(--primary-color);">標籤分類管理</h3>
+            <div class="input-group" style="display: flex; gap: 10px; margin-bottom: 0;">
+                <input type="text" id="newCategoryInput" placeholder="輸入新分類名稱..." style="flex: 1;">
+                <button class="btn-primary" onclick="addCategory()" style="width: auto; padding: 12px 20px;">新增</button>
+            </div>
+            <div id="category-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px;">
+                <!-- 這裡由 JS 動態生成分類標籤 -->
             </div>
         </div>
     </div>
