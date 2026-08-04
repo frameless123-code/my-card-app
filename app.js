@@ -331,8 +331,8 @@ async function recognizeCardWithAI() {
 
     // 定義要依序嘗試的模型清單 (優先順序：由上到下)
     const modelsToTry = [
-        'gemini-3.6-flash-lite',      
-        'gemini-3.5-flash-lite'  
+        'gemini-3.5-flash-lite',      
+        'gemini-3.1-flash-lite'  
     ];
 
     const base64Image = compressedPhotoData.split(',')[1];
@@ -388,8 +388,8 @@ async function parseTextWithAI() {
     btn.innerText = '整理中...';
 
     const modelsToTry = [
-        'gemini-3.6-flash-lite',
-        'gemini-3.5-flash-lite'  
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite'  
     ];
 
     const payload = {
