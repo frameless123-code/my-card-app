@@ -238,6 +238,10 @@ form.addEventListener('submit', function (event) {
 
     try { localStorage.setItem('cards', JSON.stringify(businessCards)); } catch (e) { alert("⚠️ 空間不足！"); }
     renderCards();
+
+    // ⭐⭐ 新增這行：儲存成功後，立刻清空表單、照片與編輯狀態 ⭐⭐
+    prepareAddCard();
+
     switchTab('home'); // 儲存完回到首頁看結果
 });
 
