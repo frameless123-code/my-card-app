@@ -320,24 +320,66 @@ function saveSettings() {
     }
 }
 
+// ==========================================
+// AI 影像辨識 (支援多模型備援機制)
+// ==========================================
 async function recognizeCardWithAI() {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) return alert('⚠️ 請先到「設定」輸入 API Key！');
     const btn = document.getElementById('aiImageBtn');
     btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> 讀取中...';
 
-    try {
-        const base64Image = compressedPhotoData.split(',')[1];
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: "提取聯絡資訊為 JSON：name, company, title, email, phone, address。找不到留空。" }, { inline_data: { mime_type: "image/jpeg", data: base64Image } }] }] })
-        });
-        const data = await res.json();
-        fillFormWithAI(data.candidates[0].content.parts[0].text);
-    } catch (e) { alert('❌ 失敗，請重試或改用純文字。'); }
-    finally { btn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI 自動讀圖填寫'; }
+    // 定義要依序嘗試的模型清單 (優先順序：由上到下)
+    const modelsToTry = [
+        'gemini-3.6-flash-lite',      
+        'gemini-3.5-flash-lite'  
+    ];
+
+    const base64Image = compressedPhotoData.split(',')[1];
+    const payload = {
+        contents: [{
+            parts: [
+                { text: "提取聯絡資訊為 JSON：name, company, title, email, phone, address。找不到留空。" },
+                { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+            ]
+        }]
+    };
+
+    let successData = null;
+
+    for (const model of modelsToTry) {
+        try {
+            console.log(`📸 正在嘗試圖片辨識模型: ${model}...`);
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            // 如果狀態碼不是 2xx (例如 429 Too Many Requests 或 500)，拋出錯誤進到 catch
+            if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
+
+            successData = await res.json();
+            break; // ⭐ 如果成功執行到這裡，就跳出迴圈，不再嘗試下一個模型
+
+        } catch (e) {
+            console.warn(`⚠️ 模型 ${model} 失敗，準備嘗試下一個...`, e.message);
+        }
+    }
+
+    // 判斷是否所有模型都失敗
+    if (successData && successData.candidates) {
+        fillFormWithAI(successData.candidates[0].content.parts[0].text);
+    } else {
+        alert('❌ 所有 AI 模型皆無回應，請稍後重試或改用文字解析。');
+    }
+
+    btn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI 自動讀圖填寫';
 }
 
+// ==========================================
+// AI 文字辨識 (支援多模型備援機制)
+// ==========================================
 async function parseTextWithAI() {
     const apiKey = localStorage.getItem('gemini_api_key');
     const rawText = document.getElementById('rawTextInput').value.trim();
@@ -345,16 +387,46 @@ async function parseTextWithAI() {
     const btn = document.getElementById('aiTextBtn');
     btn.innerText = '整理中...';
 
-    try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: "提取以下名片文字為 JSON：name, company, title, email, phone, address。找不到留空。\n" + rawText }] }] })
-        });
-        const data = await res.json();
-        fillFormWithAI(data.candidates[0].content.parts[0].text);
-        document.getElementById('rawTextInput').value = "";
-    } catch (e) { alert('❌ 失敗：' + e.message); }
-    finally { btn.innerText = '智慧文字解析'; }
+    const modelsToTry = [
+        'gemini-3.6-flash-lite',
+        'gemini-3.5-flash-lite'  
+    ];
+
+    const payload = {
+        contents: [{
+            parts: [{ text: "提取以下名片文字為 JSON：name, company, title, email, phone, address。找不到留空。\n" + rawText }]
+        }]
+    };
+
+    let successData = null;
+
+    for (const model of modelsToTry) {
+        try {
+            console.log(`📝 正在嘗試文字解析模型: ${model}...`);
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
+
+            successData = await res.json();
+            break; // ⭐ 成功則中斷迴圈
+
+        } catch (e) {
+            console.warn(`⚠️ 模型 ${model} 失敗，準備嘗試下一個...`, e.message);
+        }
+    }
+
+    if (successData && successData.candidates) {
+        fillFormWithAI(successData.candidates[0].content.parts[0].text);
+        document.getElementById('rawTextInput').value = ""; // 成功後清空輸入框
+    } else {
+        alert('❌ 所有 AI 模型皆無回應，請確認網路連線或 API Key 額度。');
+    }
+
+    btn.innerText = '智慧文字解析';
 }
 
 function fillFormWithAI(aiText) {
