@@ -198,8 +198,10 @@ function editCard(id) {
     document.getElementById('address').value = card.address || '';
     document.getElementById('notes').value = card.notes || '';
 
-    compressedPhotoData = "";
-    originalPhotoData = card.photo || ""; // 新增這行：讓舊照片也能重新編輯
+    // ✅ 將舊照片資料一併指派給 compressedPhotoData，讓 AI 有圖可讀
+    compressedPhotoData = card.photo || "";
+    originalPhotoData = card.photo || "";
+
     const preview = document.getElementById('photoPreview');
     const reeditHint = document.getElementById('reeditHint'); // 新增這行
 
@@ -231,8 +233,7 @@ function viewCardDetails(id) {
 
     // 準備詳細資料的 HTML
     const content = `
-        <img src="${imgSrc}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; margin: 0 auto 15px; box-shadow: 0 6px 16px rgba(0,0,0,0.1); border: 4px solid var(--secondary-color);">
-        <br>
+        <img src="${imgSrc}" style="width: 100%; max-width: 400px; height: 220px; object-fit: cover; border-radius: 16px; margin: 0 auto 20px; box-shadow: 0 8px 24px rgba(74, 67, 106, 0.15); display: block; border: 1px solid #E2E8F0;">
         <span class="badge" style="display:inline-block; margin-bottom: 10px; font-size: 0.9rem;">${card.category || '未分類'}</span>
         <h2 style="margin: 0 0 5px 0; color: var(--primary-color); font-size: 1.8rem;">${card.name || '未命名'}</h2>
         <p style="margin: 0 0 5px 0; color: var(--accent-color); font-weight: bold; font-size: 1.1rem;">${card.title || '未填寫職位'}</p>
@@ -388,6 +389,7 @@ function saveSettings() {
 async function recognizeCardWithAI() {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) return alert('⚠️ 請先到「設定」輸入 API Key！');
+    if (!compressedPhotoData) return alert('⚠️ 找不到名片影像，請重新上傳或拍攝！');
     const btn = document.getElementById('aiImageBtn');
     btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> 讀取中...';
 
