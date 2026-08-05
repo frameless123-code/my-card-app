@@ -166,6 +166,7 @@ function prepareAddCard() {
     document.getElementById('title').value = '';
     document.getElementById('email').value = '';
     document.getElementById('phone').value = '';
+    document.getElementById('mobile').value = '';
     document.getElementById('address').value = '';
     document.getElementById('notes').value = '';
 
@@ -193,6 +194,7 @@ function editCard(id) {
     document.getElementById('title').value = card.title || '';
     document.getElementById('email').value = card.email || '';
     document.getElementById('phone').value = card.phone || '';
+    document.getElementById('mobile').value = card.mobile || '';
     document.getElementById('address').value = card.address || '';
     document.getElementById('notes').value = card.notes || '';
 
@@ -227,6 +229,7 @@ form.addEventListener('submit', function (event) {
         name: document.getElementById('name').value,
         title: document.getElementById('title').value,
         phone: document.getElementById('phone').value,
+        mobile: document.getElementById('mobile').value,
         email: document.getElementById('email').value,
         address: document.getElementById('address').value,
         notes: document.getElementById('notes').value,
@@ -301,8 +304,9 @@ function renderCards() {
 
         // ⭐ 新增：一鍵撥號與信箱 (Click-to-Action) 加上 event.stopPropagation() 防止觸發卡片編輯
         const phoneHtml = card.phone ? `<a href="tel:${card.phone}" style="color:var(--accent-color); text-decoration:none; margin-right:15px;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">call</span> ${card.phone}</a>` : '';
+        const mobileHtml = card.mobile ? `<a href="tel:${card.mobile}" style="color:var(--accent-color); text-decoration:none; margin-right:15px;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">smartphone</span> ${card.mobile}</a>` : '';
         const emailHtml = card.email ? `<a href="mailto:${card.email}" style="color:var(--accent-color); text-decoration:none;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">mail</span> Email</a>` : '';
-        const contactHtml = (phoneHtml || emailHtml) ? `<div style="margin-top:8px; font-size:0.9rem; font-weight:bold;">${phoneHtml}${emailHtml}</div>` : '';
+        const contactHtml = (phoneHtml || mobileHtml || emailHtml) ? `<div style="margin-top:8px; font-size:0.9rem; font-weight:bold; display:flex; flex-wrap:wrap; gap:8px;">${phoneHtml}${mobileHtml}${emailHtml}</div>` : '';
 
         const cardElement = document.createElement('div');
         cardElement.className = 'form-card';
@@ -359,7 +363,7 @@ async function recognizeCardWithAI() {
     const payload = {
         contents: [{
             parts: [
-                { text: "提取聯絡資訊為 JSON：name, company, title, email, phone, address。找不到留空。" },
+                { text: "提取聯絡資訊為 JSON：name, company, title, email, phone (公司電話/市話), mobile (行動電話/手機), address。找不到留空。" },
                 { inline_data: { mime_type: "image/jpeg", data: base64Image } }
             ]
         }]
@@ -414,7 +418,7 @@ async function parseTextWithAI() {
 
     const payload = {
         contents: [{
-            parts: [{ text: "提取以下名片文字為 JSON：name, company, title, email, phone, address。找不到留空。\n" + rawText }]
+            parts: [{ text: "提取以下名片文字為 JSON：name, company, title, email, phone (公司電話/市話), mobile (行動電話/手機), address。找不到留空。\n" + rawText }]
         }]
     };
 
@@ -457,6 +461,7 @@ function fillFormWithAI(aiText) {
         if (cardData.title) document.getElementById('title').value = cardData.title;
         if (cardData.email) document.getElementById('email').value = cardData.email;
         if (cardData.phone) document.getElementById('phone').value = cardData.phone;
+        if (cardData.mobile) document.getElementById('mobile').value = cardData.mobile;
         if (cardData.address) document.getElementById('address').value = cardData.address;
     } catch (e) { console.error("JSON 轉換失敗"); }
 }
@@ -633,7 +638,7 @@ function exportCSV() {
 
     // 加入 BOM 以解決 Excel 打開 CSV 時的中文亂碼問題
     let csvContent = "\uFEFF";
-    csvContent += "分類,姓名,公司,職位,電話,Email,地址,備註\n";
+    csvContent += "分類,姓名,公司,職位,公司電話,行動電話,Email,地址,備註\n";
 
     businessCards.forEach(card => {
         // 處理內容，避免使用者輸入的逗號或換行符號破壞 CSV 格式
@@ -643,6 +648,7 @@ function exportCSV() {
             card.company || '',
             card.title || '',
             card.phone || '',
+            card.mobile || '',
             card.email || '',
             card.address || '',
             card.notes || ''
