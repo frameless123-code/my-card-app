@@ -506,7 +506,8 @@
         <div class="nav-item" id="nav-list" onclick="switchTab('list')">
             <span class="material-symbols-outlined">view_agenda</span>名片庫
         </div>
-        <div class="nav-item" id="nav-add" onclick="switchTab('add')">
+        <!-- 將原本的 onclick="switchTab('add')" 修改為下面這樣 -->
+        <div class="nav-item" id="nav-add" onclick="prepareAddCard(); switchTab('add')">
             <span class="material-symbols-outlined">add_circle</span>新增
         </div>
         <div class="nav-item" id="nav-settings" onclick="switchTab('settings')">

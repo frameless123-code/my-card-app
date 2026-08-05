@@ -158,9 +158,19 @@ function reopenCropper() {
 function prepareAddCard() {
     editingId = null;
     form.reset();
+
+    // ⭐ 修改重點：手動清空每一個欄位的值，確保沒有上次修改的殘留
+    document.getElementById('category').value = '未分類';
+    document.getElementById('company').value = '';
+    document.getElementById('name').value = '';
+    document.getElementById('title').value = '';
+    document.getElementById('email').value = '';
+    document.getElementById('phone').value = '';
+    document.getElementById('address').value = '';
+    document.getElementById('notes').value = '';
+
     document.getElementById('photoPreview').style.display = 'none';
 
-    // 新增這兩行：清空重裁提示與舊資料
     const reeditHint = document.getElementById('reeditHint');
     if (reeditHint) reeditHint.style.display = 'none';
     originalPhotoData = "";
@@ -223,26 +233,32 @@ form.addEventListener('submit', function (event) {
         photo: compressedPhotoData
     };
 
+    let successMessage = ""; // 準備成功訊息
+
     if (editingId) {
         const index = businessCards.findIndex(card => card.id === editingId);
         if (index !== -1) {
             if (!compressedPhotoData) cardData.photo = businessCards[index].photo;
             businessCards[index] = { ...businessCards[index], ...cardData };
         }
-        alert('✅ 更新成功！');
+        successMessage = '✅ 更新成功！';
     } else {
         cardData.id = Date.now();
         businessCards.unshift(cardData);
-        alert('✅ 儲存成功！');
+        successMessage = '✅ 儲存成功！';
     }
 
     try { localStorage.setItem('cards', JSON.stringify(businessCards)); } catch (e) { alert("⚠️ 空間不足！"); }
     renderCards();
 
-    // ⭐⭐ 新增這行：儲存成功後，立刻清空表單、照片與編輯狀態 ⭐⭐
+    // ⭐ 修改重點：先清空表單與切換頁面，最後再跳提示
     prepareAddCard();
+    switchTab('home');
 
-    switchTab('home'); // 儲存完回到首頁看結果
+    // 使用 setTimeout 讓 UI 有時間完成跳轉渲染，避免畫面卡死
+    setTimeout(() => {
+        alert(successMessage);
+    }, 100);
 });
 
 function deleteCard(id, event) {
