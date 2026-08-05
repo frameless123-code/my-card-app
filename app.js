@@ -63,7 +63,7 @@ function renderRecentCards() {
         const imgSrc = card.photo || defaultImg;
 
         const cardHtml = `
-            <div class="swipe-card" onclick="editCard(${card.id})">
+            <div class="swipe-card" onclick="viewCardDetails(${card.id})">
                 <img src="${imgSrc}" alt="名片預覽">
                 <div>
                     <h4>${card.name || '未命名'}</h4>
@@ -219,6 +219,44 @@ function editCard(id) {
 }
 
 // ==========================================
+// ⭐ 新增：查看名片詳細資料
+// ==========================================
+function viewCardDetails(id) {
+    const card = businessCards.find(c => c.id === id);
+    if (!card) return;
+
+    // 處理沒有照片時的預設圖
+    const defaultImg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjZWVlIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIvPjwvc3ZnPg==';
+    const imgSrc = card.photo || defaultImg;
+
+    // 準備詳細資料的 HTML
+    const content = `
+        <img src="${imgSrc}" style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; margin: 0 auto 15px; box-shadow: 0 6px 16px rgba(0,0,0,0.1); border: 4px solid var(--secondary-color);">
+        <br>
+        <span class="badge" style="display:inline-block; margin-bottom: 10px; font-size: 0.9rem;">${card.category || '未分類'}</span>
+        <h2 style="margin: 0 0 5px 0; color: var(--primary-color); font-size: 1.8rem;">${card.name || '未命名'}</h2>
+        <p style="margin: 0 0 5px 0; color: var(--accent-color); font-weight: bold; font-size: 1.1rem;">${card.title || '未填寫職位'}</p>
+        <p style="margin: 0 0 25px 0; color: #888; font-size: 1rem;">${card.company || '未填寫公司'}</p>
+
+        <div style="text-align: left; background: var(--secondary-color); padding: 20px; border-radius: 16px; margin-bottom: 20px;">
+            ${card.mobile ? `<p style="margin: 8px 0; display:flex; align-items:center; gap:10px;"><span class="material-symbols-outlined" style="color:var(--primary-color);">smartphone</span> <a href="tel:${card.mobile}" style="color:var(--text-color); text-decoration:none; font-weight:bold; font-size:1.1rem;">${card.mobile}</a></p>` : ''}
+            ${card.phone ? `<p style="margin: 8px 0; display:flex; align-items:center; gap:10px;"><span class="material-symbols-outlined" style="color:var(--primary-color);">call</span> <a href="tel:${card.phone}" style="color:var(--text-color); text-decoration:none; font-weight:bold; font-size:1.1rem;">${card.phone}</a></p>` : ''}
+            ${card.email ? `<p style="margin: 8px 0; display:flex; align-items:center; gap:10px;"><span class="material-symbols-outlined" style="color:var(--primary-color);">mail</span> <a href="mailto:${card.email}" style="color:var(--text-color); text-decoration:none; font-size:1rem;">${card.email}</a></p>` : ''}
+            ${card.address ? `<p style="margin: 8px 0; display:flex; align-items:start; gap:10px;"><span class="material-symbols-outlined" style="color:var(--primary-color);">location_on</span> <span style="font-size:1rem; line-height:1.4;">${card.address}</span></p>` : ''}
+            ${card.notes ? `<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #d1d9e6;"><strong style="color:var(--primary-color); display:flex; align-items:center; gap:5px;"><span class="material-symbols-outlined" style="font-size:18px;">edit_note</span> 備註事項</strong><p style="color:#666; font-size:0.95rem; line-height:1.5; margin:8px 0 0 0;">${card.notes.replace(/\n/g, '<br>')}</p></div>` : ''}
+        </div>
+    `;
+
+    document.getElementById('detailContent').innerHTML = content;
+
+    // 設定右上角「修改」按鈕的點擊事件
+    document.getElementById('detailEditBtn').onclick = () => editCard(id);
+
+    // 切換到詳細資料畫面
+    switchTab('detail');
+}
+
+// ==========================================
 // 儲存、刪除與列表渲染
 // ==========================================
 form.addEventListener('submit', function (event) {
@@ -313,7 +351,7 @@ function renderCards() {
         cardElement.style.display = 'flex';
         cardElement.style.alignItems = 'center';
         cardElement.style.cursor = 'pointer';
-        cardElement.onclick = () => editCard(card.id);
+        cardElement.onclick = () => viewCardDetails(card.id);
 
         cardElement.innerHTML = `
             ${photoHtml}

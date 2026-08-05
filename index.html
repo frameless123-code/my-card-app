@@ -487,6 +487,24 @@
         </div>
     </div>
 
+    <!-- 5. 名片詳細預覽 (新增此區塊) -->
+    <div id="view-detail" class="view-section">
+        <div class="form-card" style="position: relative;">
+            <!-- 頂部按鈕列：返回 與 修改 -->
+            <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                <button class="btn-secondary" style="width: auto; padding: 8px 15px;" onclick="switchTab('list')">
+                    <span class="material-symbols-outlined" style="font-size: 20px; vertical-align: middle;">arrow_back</span> 返回
+                </button>
+                <button class="btn-primary" style="width: auto; padding: 8px 15px; background-color: var(--accent-color);" id="detailEditBtn">
+                    <span class="material-symbols-outlined" style="font-size: 20px; vertical-align: middle;">edit</span> 修改
+                </button>
+            </div>
+
+            <!-- 名片詳細內容將由 JS 動態填入 -->
+            <div id="detailContent" style="text-align: center;"></div>
+        </div>
+    </div>
+
     <!-- ⭐ Cropper.js 專屬的全螢幕裁切彈窗 -->
     <div id="cropperModal">
         <div class="cropper-workspace">
