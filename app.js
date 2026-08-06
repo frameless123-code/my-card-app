@@ -10,6 +10,13 @@ let originalPhotoData = ""; // 新增這行：用來記錄未裁切的原始高�
 let cropper = null; // 新增 Cropper 全域變數
 // 目前在名片庫套用的分類篩選；null 代表顯示全部
 let activeCategoryFilter = null;
+
+// 進入名片詳細頁前，記住名片庫的捲動位置
+let cardListScrollPosition = 0;
+
+// 是否從名片庫進入詳細頁
+let detailOpenedFromList = false;
+
 let cropRotation = 0;
 
 function openCropperModal() {
@@ -151,27 +158,86 @@ if (apiKeyInput) {
 // ==========================================
 // UI 切換與儀表板更新
 // ==========================================
-function switchTab(tabId) {
-    document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
-    document.getElementById('view-' + tabId).classList.add('active');
+// 切換頁面後回到最上方
+function scrollPageToTop() {
+    requestAnimationFrame(() => {
+        window.scrollTo({
+            top: 0,
+            left: 0,
+            behavior: 'auto'
+        });
 
-    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    });
+}
+
+// 回到名片庫原本的位置
+function restoreCardListScroll() {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            window.scrollTo({
+                top: cardListScrollPosition,
+                left: 0,
+                behavior: 'auto'
+            });
+        });
+    });
+}
+
+function switchTab(tabId, options = {}) {
+    const restoreScroll = options.restoreScroll === true;
+
+    document.querySelectorAll('.view-section').forEach(view => {
+        view.classList.remove('active');
+    });
+
+    const targetView = document.getElementById('view-' + tabId);
+
+    if (!targetView) {
+        console.warn(`找不到頁面：view-${tabId}`);
+        return;
+    }
+
+    targetView.classList.add('active');
+
+    document.querySelectorAll('.nav-item').forEach(nav => {
+        nav.classList.remove('active');
+    });
+
     const activeNav = document.getElementById('nav-' + tabId);
-    if (activeNav) activeNav.classList.add('active');
+
+    if (activeNav) {
+        activeNav.classList.add('active');
+    }
 
     if (tabId === 'home') {
         updateHomeCount();
-        renderRecentCards(); // 切換到首頁時刷新橫向捲軸
+        renderRecentCards();
     }
 
-    // 新增這段
     if (tabId === 'list') {
         renderCards();
     }
 
-    if (tabId === 'add' && !editingId) prepareAddCard();
+    if (tabId === 'add' && !editingId) {
+        prepareAddCard();
+    }
+
+    if (tabId === 'list' && restoreScroll) {
+        restoreCardListScroll();
+    } else {
+        scrollPageToTop();
+    }
 }
 
+function backFromCardDetail() {
+    switchTab('list', {
+        restoreScroll: detailOpenedFromList
+    });
+
+    detailOpenedFromList = false;
+}
 function updateHomeCount() {
     const countSpan = document.getElementById('total-cards-count');
 
@@ -544,6 +610,19 @@ async function viewCardDetails(id) {
 
     // 設定右上角「修改」按鈕的點擊事件
     document.getElementById('detailEditBtn').onclick = () => editCard(id);
+
+    // 記錄這次是否從名片庫進入詳細頁
+    detailOpenedFromList = document
+        .getElementById('view-list')
+        .classList.contains('active');
+
+    if (detailOpenedFromList) {
+        cardListScrollPosition =
+            window.scrollY ||
+            document.documentElement.scrollTop ||
+            document.body.scrollTop ||
+            0;
+    }
 
     // 切換到詳細資料畫面
     switchTab('detail');
