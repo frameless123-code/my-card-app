@@ -288,16 +288,22 @@ function renderRecentCards() {
         const defaultImg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjZWVlIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIvPjwvc3ZnPg==';
         const imgSrc = card.photoUrl || defaultImg;
 
-        const cardHtml = `
-            <div class="swipe-card" onclick="viewCardDetails(${card.id})">
-                <img src="${imgSrc}" alt="名片預覽">
-                <div>
-                    <h4>${card.name || '未命名'}</h4>
-                    <p>${card.company || '無公司資訊'}</p>
-                </div>
+        // 不使用 inline onclick，避免字串型 ID 被瀏覽器轉成數字。
+        const cardElement = document.createElement('div');
+        cardElement.className = 'swipe-card';
+        cardElement.addEventListener('click', () => {
+            viewCardDetails(card.id);
+        });
+
+        cardElement.innerHTML = `
+            <img src="${imgSrc}" alt="名片預覽">
+            <div>
+                <h4>${card.name || '未命名'}</h4>
+                <p>${card.company || '無公司資訊'}</p>
             </div>
         `;
-        recentCardsContainer.insertAdjacentHTML('beforeend', cardHtml);
+
+        recentCardsContainer.appendChild(cardElement);
     });
 }
 
@@ -490,9 +496,28 @@ async function editCard(id) {
 // ==========================================
 // ⭐ 新增：查看名片詳細資料
 // ==========================================
-function viewCardDetails(id) {
-    const card = businessCards.find(c => c.id === id);
-    if (!card) return;
+async function viewCardDetails(id) {
+    const findCard = () => businessCards.find(card =>
+        card.id === id || String(card.id) === String(id)
+    );
+
+    let card = findCard();
+
+    // 畫面資料若剛更新，重新從 IndexedDB 載入一次再尋找。
+    if (!card) {
+        try {
+            await loadCardsFromDatabase();
+            card = findCard();
+        } catch (error) {
+            console.error('重新載入名片失敗：', error);
+        }
+    }
+
+    if (!card) {
+        console.warn('找不到要預覽的名片：', id);
+        alert('⚠️ 找不到這張名片，請重新整理後再試。');
+        return;
+    }
 
     // 處理沒有照片時的預設圖
     const defaultImg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjZWVlIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIvPjwvc3ZnPg==';
