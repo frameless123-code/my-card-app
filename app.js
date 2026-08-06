@@ -6,6 +6,64 @@ let editingId = null;
 let compressedPhotoData = "";
 let originalPhotoData = ""; // 新增這行：用來記錄未裁切的原始高畫質圖片
 let cropper = null; // 新增 Cropper 全域變數
+let cropRotation = 0;
+
+function openCropperModal() {
+    const modal = document.getElementById('cropperModal');
+
+    modal.style.display = 'flex';
+    document.documentElement.classList.add('cropper-open');
+    document.body.classList.add('cropper-open');
+
+    // 避免先前旋轉造成頁面保留水平偏移
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollLeft = 0;
+}
+
+function closeCropperModal() {
+    const modal = document.getElementById('cropperModal');
+
+    modal.style.display = 'none';
+    document.documentElement.classList.remove('cropper-open');
+    document.body.classList.remove('cropper-open');
+
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollLeft = 0;
+}
+
+function createCropper(imageElement) {
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+
+    cropRotation = 0;
+
+    cropper = new Cropper(imageElement, {
+        viewMode: 1,
+
+        /* 預設裁切框盡量放大 */
+        autoCropArea: 1,
+
+        background: false,
+        responsive: true,
+        restore: false,
+        checkOrientation: true,
+
+        dragMode: 'move',
+        movable: true,
+        zoomable: true,
+        zoomOnTouch: true,
+        zoomOnWheel: true,
+
+        rotatable: true,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+
+        toggleDragModeOnDblclick: false
+    });
+}
+
 // 取得自訂分類，若無則提供預設值
 let categories = JSON.parse(localStorage.getItem('categories')) || ['未分類', 'VIP客戶', '一般客戶', '供應商'];
 
@@ -84,44 +142,67 @@ document.getElementById('photoInput').addEventListener('change', function (event
 
     const reader = new FileReader();
     reader.onload = function (e) {
-        originalPhotoData = e.target.result; // 新增這行：把原始照片存起來備用
-        // 1. 將選取的圖片載入到裁切器的 img 標籤中
+        originalPhotoData = e.target.result;
+
         const imageToCrop = document.getElementById('imageToCrop');
+
+        imageToCrop.onload = function () {
+            openCropperModal();
+            createCropper(imageToCrop);
+        };
+
         imageToCrop.src = e.target.result;
-
-        // 2. 顯示全螢幕裁切彈窗
-        document.getElementById('cropperModal').style.display = 'flex';
-
-        // 3. 初始化 Cropper.js (若已有實例則先銷毀)
-        if (cropper) cropper.destroy();
-        cropper = new Cropper(imageToCrop, {
-            viewMode: 1,
-            autoCropArea: 0.9, // 預設框選 90% 區域
-            background: false,
-        });
     };
     reader.readAsDataURL(file);
 });
 
 function rotateCrop() {
-    if (cropper) cropper.rotate(90);
+    if (!cropper) return;
+
+    cropRotation = (cropRotation + 90) % 360;
+    cropper.rotateTo(cropRotation);
+
+    requestAnimationFrame(() => {
+        document.documentElement.scrollLeft = 0;
+        document.body.scrollLeft = 0;
+
+        const workspace = document.querySelector('.cropper-workspace');
+        if (workspace) {
+            workspace.scrollLeft = 0;
+        }
+    });
 }
 
 function cancelCrop() {
-    document.getElementById('cropperModal').style.display = 'none';
-    document.getElementById('photoInput').value = ""; // 清除選取
-    if (cropper) cropper.destroy();
+    closeCropperModal();
+
+    document.getElementById('photoInput').value = '';
+
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+
+    cropRotation = 0;
 }
 
 function confirmCrop() {
     if (!cropper) return;
 
     // 取得裁切後的 Canvas 並壓縮 (設定最大寬度 800px 節省 AI 頻寬)
-    const canvas = cropper.getCroppedCanvas({ maxWidth: 800 });
+    const canvas = cropper.getCroppedCanvas({
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high',
+        fillColor: '#ffffff'
+    });
+
+    compressedPhotoData = canvas.toDataURL('image/jpeg', 0.85);
     compressedPhotoData = canvas.toDataURL('image/jpeg', 0.7);
 
     // 關閉彈窗與銷毀 cropper
-    document.getElementById('cropperModal').style.display = 'none';
+    closeCropperModal();
     cropper.destroy();
     cropper = null;
 
@@ -141,15 +222,15 @@ function confirmCrop() {
 // 新增這個函數：點擊預覽圖時重新打開裁切器
 function reopenCropper() {
     if (!originalPhotoData) return;
+
     const imageToCrop = document.getElementById('imageToCrop');
+
+    imageToCrop.onload = function () {
+        openCropperModal();
+        createCropper(imageToCrop);
+    };
+
     imageToCrop.src = originalPhotoData;
-    document.getElementById('cropperModal').style.display = 'flex';
-    if (cropper) cropper.destroy();
-    cropper = new Cropper(imageToCrop, {
-        viewMode: 1,
-        autoCropArea: 0.9,
-        background: false,
-    });
 }
 
 // ==========================================

@@ -264,39 +264,72 @@
             font-size: 1rem;
         }
 
-        /* --- Cropper 裁切區塊 --- */
+        /* 防止 Cropper 旋轉後把整個網頁撐寬 */
+        html,
+        body {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+            html.cropper-open,
+            body.cropper-open {
+                overflow: hidden;
+                overscroll-behavior: none;
+            }
+
         #cropperModal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.9);
+            inset: 0;
+            /* 使用動態視窗尺寸，手機瀏覽器比較穩定 */
+            width: 100dvw;
+            height: 100dvh;
+            background: rgba(0, 0, 0, 0.92);
             z-index: 2000;
             flex-direction: column;
+            overflow: hidden;
+            box-sizing: border-box;
         }
 
+        /* 裁切區盡量使用剩餘畫面 */
         .cropper-workspace {
-            flex: 1;
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
+            min-height: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            /* 原本 20px，縮小後裁切畫面會更大 */
+            padding: 6px;
+            overflow: hidden;
+            box-sizing: border-box;
         }
 
             .cropper-workspace img {
+                display: block;
                 max-width: 100%;
-                max-height: 70vh;
+                max-height: 100%;
             }
 
+            /* 防止旋轉後 Cropper 容器超出螢幕 */
+            .cropper-workspace .cropper-container {
+                max-width: 100% !important;
+                max-height: 100% !important;
+                overflow: hidden;
+            }
+
+        /* 減少工具列佔用高度 */
         .cropper-toolbar {
-            /* 將底部的留白從 30px 加大到 60px (或視需求調整為 80px) */
-            padding: 20px 20px calc(60px + env(safe-area-inset-bottom)) 20px;
+            flex: 0 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
             display: flex;
             gap: 10px;
             background: #fff;
-            border-radius: 20px 20px 0 0;
+            border-radius: 18px 18px 0 0;
         }
 
         /* --- 底部導航 --- */
