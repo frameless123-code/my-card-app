@@ -437,44 +437,54 @@ function prepareAddCard() {
 }
 
 async function editCard(id) {
-    const card = businessCards.find(c => c.id === id);
-    if (!card) return;
+    try {
+        // 直接從 IndexedDB 取得完整資料，避免只依賴畫面上的暫存物件。
+        const card = await CardDB.getCard(id);
+        if (!card) {
+            alert('⚠️ 找不到這張名片，請重新整理後再試。');
+            return;
+        }
 
-    editingId = id;
-    document.getElementById('category').value = card.category || '未分類';
-    document.getElementById('company').value = card.company || '';
-    document.getElementById('name').value = card.name || '';
-    document.getElementById('title').value = card.title || '';
-    document.getElementById('email').value = card.email || '';
-    document.getElementById('phone').value = card.phone || '';
-    document.getElementById('mobile').value = card.mobile || '';
-    document.getElementById('address').value = card.address || '';
-    document.getElementById('notes').value = card.notes || '';
+        editingId = id;
+        document.getElementById('category').value = card.category || '未分類';
+        document.getElementById('company').value = card.company || '';
+        document.getElementById('name').value = card.name || '';
+        document.getElementById('title').value = card.title || '';
+        document.getElementById('email').value = card.email || '';
+        document.getElementById('phone').value = card.phone || '';
+        document.getElementById('mobile').value = card.mobile || '';
+        document.getElementById('address').value = card.address || '';
+        document.getElementById('notes').value = card.notes || '';
 
-    compressedPhotoBlob = card.photoBlob || null;
-    compressedPhotoData = "";
-    originalPhotoData = card.photoBlob
-        ? await CardDB.blobToDataUrl(card.photoBlob)
-        : "";
+        // 編輯時保留原本的 Blob；沒有重新選圖也不會把照片清掉。
+        compressedPhotoBlob = card.photoBlob instanceof Blob
+            ? card.photoBlob
+            : null;
+        compressedPhotoData = '';
+        originalPhotoData = compressedPhotoBlob
+            ? await CardDB.blobToDataUrl(compressedPhotoBlob)
+            : '';
 
-    revokePreviewObjectUrl();
-    const preview = document.getElementById('photoPreview');
-    const reeditHint = document.getElementById('reeditHint');
+        const reeditHint = document.getElementById('reeditHint');
 
-    if (card.photoUrl) {
-        preview.src = card.photoUrl;
-        preview.style.display = 'block';
-        if (reeditHint) reeditHint.style.display = 'block';
-        document.getElementById('aiImageBtn').style.display = 'flex';
-    } else {
-        preview.removeAttribute('src');
-        preview.style.display = 'none';
-        if (reeditHint) reeditHint.style.display = 'none';
-        document.getElementById('aiImageBtn').style.display = 'none';
+        if (compressedPhotoBlob) {
+            // 使用獨立的預覽 URL，不共用列表中的 photoUrl。
+            showPhotoPreviewFromBlob(compressedPhotoBlob);
+            if (reeditHint) reeditHint.style.display = 'block';
+            document.getElementById('aiImageBtn').style.display = 'flex';
+        } else {
+            showPhotoPreviewFromBlob(null);
+            if (reeditHint) reeditHint.style.display = 'none';
+            document.getElementById('aiImageBtn').style.display = 'none';
+        }
+
+        document.getElementById('submitBtn').innerHTML =
+            '<span class="material-symbols-outlined">update</span> 更新名片';
+        switchTab('add');
+    } catch (error) {
+        console.error('讀取名片失敗：', error);
+        alert('❌ 無法讀取這張名片，請重新整理後再試。');
     }
-
-    document.getElementById('submitBtn').innerHTML = '<span class="material-symbols-outlined">update</span> 更新名片';
-    switchTab('add');
 }
 
 // ==========================================
@@ -521,45 +531,65 @@ form.addEventListener('submit', async function (event) {
     event.preventDefault();
 
     const submitBtn = document.getElementById('submitBtn');
-    const existingCard = editingId
-        ? businessCards.find(card => card.id === editingId)
-        : null;
+    const currentEditingId = editingId;
+    const wasEditing = currentEditingId !== null;
     const now = Date.now();
 
-    const cardData = {
-        id: editingId || now,
-        category: document.getElementById('category').value,
-        company: document.getElementById('company').value.trim(),
-        name: document.getElementById('name').value.trim(),
-        title: document.getElementById('title').value.trim(),
-        phone: document.getElementById('phone').value.trim(),
-        mobile: document.getElementById('mobile').value.trim(),
-        email: document.getElementById('email').value.trim(),
-        address: document.getElementById('address').value.trim(),
-        notes: document.getElementById('notes').value.trim(),
-        photoBlob: compressedPhotoBlob || existingCard?.photoBlob || null,
-        createdAt: existingCard?.createdAt || now,
-        updatedAt: now
-    };
-
-    const successMessage = editingId ? '✅ 更新成功！' : '✅ 儲存成功！';
-
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> 儲存中...';
+    submitBtn.innerHTML =
+        '<span class="material-symbols-outlined">hourglass_empty</span> 儲存中...';
 
     try {
+        // 更新時直接讀取資料庫裡的舊資料，確保原照片一定能被保留。
+        const existingCard = wasEditing
+            ? await CardDB.getCard(currentEditingId)
+            : null;
+
+        if (wasEditing && !existingCard) {
+            throw new Error('找不到要更新的名片。');
+        }
+
+        const preservedPhotoBlob = compressedPhotoBlob instanceof Blob
+            ? compressedPhotoBlob
+            : (existingCard?.photoBlob instanceof Blob
+                ? existingCard.photoBlob
+                : null);
+
+        const cardData = {
+            id: wasEditing ? currentEditingId : now,
+            category: document.getElementById('category').value,
+            company: document.getElementById('company').value.trim(),
+            name: document.getElementById('name').value.trim(),
+            title: document.getElementById('title').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            mobile: document.getElementById('mobile').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            address: document.getElementById('address').value.trim(),
+            notes: document.getElementById('notes').value.trim(),
+            photoBlob: preservedPhotoBlob,
+            createdAt: existingCard?.createdAt || now,
+            updatedAt: now
+        };
+
         await CardDB.putCard(cardData);
         await loadCardsFromDatabase();
+
+        const successMessage = wasEditing
+            ? '✅ 更新成功！'
+            : '✅ 儲存成功！';
 
         prepareAddCard();
         switchTab('home');
         alert(successMessage);
     } catch (error) {
         console.error('IndexedDB 儲存失敗：', error);
-        alert('❌ 名片儲存失敗，請確認瀏覽器仍有可用空間。');
+        alert('❌ 名片儲存失敗，原有資料不會被覆蓋。請重新整理後再試。');
+
+        // 儲存失敗時保留編輯狀態與按鈕文字。
+        editingId = currentEditingId;
     } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = editingId
+        submitBtn.innerHTML = editingId !== null
             ? '<span class="material-symbols-outlined">update</span> 更新名片'
             : '<span class="material-symbols-outlined">save</span> 儲存名片';
     }
