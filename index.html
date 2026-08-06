@@ -97,6 +97,80 @@
                 font-size: 0.9rem;
             }
 
+        /* --- 首頁：標籤人數統計 --- */
+        .dashboard-stats {
+            cursor: pointer;
+        }
+
+        .category-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
+        .category-stat-card {
+            appearance: none;
+            border: none;
+            width: 100%;
+            min-width: 0;
+            background: var(--white);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: var(--shadow);
+            text-align: left;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+            .category-stat-card:active {
+                transform: scale(0.97);
+            }
+
+        .category-stat-count {
+            display: block;
+            color: var(--accent-color);
+            font-size: 1.65rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .category-stat-name {
+            display: block;
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* 名片庫目前使用的分類篩選 */
+        .active-filter-bar {
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            background: #EEEAFE;
+            color: var(--primary-color);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .clear-filter-btn {
+            appearance: none;
+            border: none;
+            background: var(--accent-color);
+            color: white;
+            border-radius: 9px;
+            padding: 7px 11px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
         /* --- 標題區塊 --- */
         .section-title {
             font-size: 1.1rem;
@@ -388,7 +462,11 @@
     <div id="view-home" class="view-section active">
 
         <!-- 頂部數據儀表板 -->
-        <div class="dashboard-stats">
+        <div class="dashboard-stats"
+             onclick="showAllCards()"
+             role="button"
+             tabindex="0"
+             onkeydown="if(event.key === 'Enter'){ showAllCards(); }">
             <div>
                 <p>我的名片庫</p>
                 <h2><span id="total-cards-count">0</span> <span style="font-size: 1rem; font-weight: normal;">位聯絡人</span></h2>
@@ -396,9 +474,21 @@
             <span class="material-symbols-outlined" style="font-size: 48px; opacity: 0.2;">contact_mail</span>
         </div>
 
+        <!-- 標籤分類人數 -->
+        <div class="section-title">
+            標籤分類
+            <span style="font-size: 0.8rem; font-weight: normal; color: #888;">
+                點擊查看
+            </span>
+        </div>
+
+        <div id="category-stats-container" class="category-stats-grid">
+            <!-- 由 JavaScript 自動產生 -->
+        </div>
+
         <!-- 最近新增 -->
         <div class="section-title">
-            最近新增 <span style="font-size: 0.8rem; font-weight: normal; color: #888; cursor:pointer;" onclick="switchTab('list')">檢視全部</span>
+            最近新增 <span style="font-size: 0.8rem; font-weight: normal; color: #888; cursor:pointer;" onclick="showAllCards()">檢視全部</span>
         </div>
 
         <!-- 改用 responsive-scroll 取代原本的 horizontal-scroll -->
@@ -411,7 +501,10 @@
     <!-- 2. 名片庫列表 -->
     <div id="view-list" class="view-section">
         <div class="form-card" style="padding: 10px; margin-bottom: 15px; display: flex; gap: 10px;">
-            <input type="text" id="searchInput" placeholder="搜尋姓名或公司..." style="flex: 2; border:none; background:transparent;">
+            <input type="text"
+                   id="searchInput"
+                   placeholder="搜尋姓名、公司、標籤、職位、電話..."
+                   style="flex: 2; border:none; background:transparent;">
             <!-- 新增排序選單 -->
             <select id="sortSelect" style="flex: 1; border:none; background:#F0F4F8; padding: 5px; border-radius: 8px; color: var(--primary-color); font-size: 0.85rem;" onchange="renderCards()">
                 <option value="newest">最新加入</option>
@@ -419,6 +512,15 @@
                 <option value="category">依分類</option>
             </select>
             <span class="material-symbols-outlined" style="color:#aaa; align-self: center;">search</span>
+        </div>
+        <div id="active-filter-bar" class="active-filter-bar">
+            <span id="active-filter-text">目前標籤</span>
+
+            <button type="button"
+                    class="clear-filter-btn"
+                    onclick="clearCategoryFilter()">
+                顯示全部
+            </button>
         </div>
         <div id="card-list"></div>
     </div>
@@ -555,7 +657,7 @@
         <div class="nav-item active" id="nav-home" onclick="switchTab('home')">
             <span class="material-symbols-outlined">explore</span>發現
         </div>
-        <div class="nav-item" id="nav-list" onclick="switchTab('list')">
+        <div class="nav-item" id="nav-list" onclick="showAllCards()">
             <span class="material-symbols-outlined">view_agenda</span>名片庫
         </div>
         <!-- 將原本的 onclick="switchTab('add')" 修改為下面這樣 -->

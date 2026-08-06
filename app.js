@@ -6,6 +6,8 @@ let editingId = null;
 let compressedPhotoData = "";
 let originalPhotoData = ""; // 新增這行：用來記錄未裁切的原始高畫質圖片
 let cropper = null; // 新增 Cropper 全域變數
+// 目前在名片庫套用的分類篩選；null 代表顯示全部
+let activeCategoryFilter = null;
 let cropRotation = 0;
 
 function openCropperModal() {
@@ -71,6 +73,14 @@ const form = document.getElementById('cardForm');
 const cardList = document.getElementById('card-list');
 const recentCardsContainer = document.getElementById('recent-cards-container');
 const searchInput = document.getElementById('searchInput');
+const categoryStatsContainer =
+    document.getElementById('category-stats-container');
+
+const activeFilterBar =
+    document.getElementById('active-filter-bar');
+
+const activeFilterText =
+    document.getElementById('active-filter-text');
 
 // 初始化載入 API Key
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -93,12 +103,110 @@ function switchTab(tabId) {
         updateHomeCount();
         renderRecentCards(); // 切換到首頁時刷新橫向捲軸
     }
+
+    // 新增這段
+    if (tabId === 'list') {
+        renderCards();
+    }
+
     if (tabId === 'add' && !editingId) prepareAddCard();
 }
 
 function updateHomeCount() {
     const countSpan = document.getElementById('total-cards-count');
-    if (countSpan) countSpan.innerText = businessCards.length;
+
+    if (countSpan) {
+        countSpan.innerText = businessCards.length;
+    }
+
+    // 同時更新首頁標籤人數
+    renderCategoryStats();
+}
+
+// 空白分類統一當作「未分類」
+function getCardCategory(card) {
+    const category = String(card.category || '').trim();
+    return category || '未分類';
+}
+
+// 渲染首頁各標籤的人數
+function renderCategoryStats() {
+    if (!categoryStatsContainer) return;
+
+    categoryStatsContainer.innerHTML = '';
+
+    categories.forEach(category => {
+        const categoryName = String(category);
+
+        const count = businessCards.filter(card =>
+            getCardCategory(card) === categoryName
+        ).length;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'category-stat-card';
+
+        const countElement = document.createElement('span');
+        countElement.className = 'category-stat-count';
+        countElement.textContent = `${count} 人`;
+
+        const nameElement = document.createElement('span');
+        nameElement.className = 'category-stat-name';
+        nameElement.textContent = categoryName;
+        nameElement.title = categoryName;
+
+        button.appendChild(countElement);
+        button.appendChild(nameElement);
+
+        button.addEventListener('click', () => {
+            filterByCategory(categoryName);
+        });
+
+        categoryStatsContainer.appendChild(button);
+    });
+}
+
+// 顯示全部名片
+function showAllCards() {
+    activeCategoryFilter = null;
+
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    switchTab('list');
+}
+
+// 從首頁點擊某個標籤
+function filterByCategory(category) {
+    activeCategoryFilter = category;
+
+    // 避免舊搜尋文字影響分類結果
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
+    switchTab('list');
+}
+
+// 清除分類，但保留目前搜尋文字
+function clearCategoryFilter() {
+    activeCategoryFilter = null;
+    renderCards();
+}
+
+// 顯示目前使用中的分類
+function updateActiveFilterUI(resultCount) {
+    if (!activeFilterBar || !activeFilterText) return;
+
+    if (activeCategoryFilter) {
+        activeFilterBar.style.display = 'flex';
+        activeFilterText.textContent =
+            `標籤：${activeCategoryFilter}（目前 ${resultCount} 人）`;
+    } else {
+        activeFilterBar.style.display = 'none';
+        activeFilterText.textContent = '';
+    }
 }
 
 // ==========================================
@@ -189,7 +297,6 @@ function cancelCrop() {
 function confirmCrop() {
     if (!cropper) return;
 
-    // 取得裁切後的 Canvas 並壓縮 (設定最大寬度 800px 節省 AI 頻寬)
     const canvas = cropper.getCroppedCanvas({
         maxWidth: 1600,
         maxHeight: 1600,
@@ -199,23 +306,22 @@ function confirmCrop() {
     });
 
     compressedPhotoData = canvas.toDataURL('image/jpeg', 0.85);
-    compressedPhotoData = canvas.toDataURL('image/jpeg', 0.7);
 
-    // 關閉彈窗與銷毀 cropper
     closeCropperModal();
+
     cropper.destroy();
     cropper = null;
+    cropRotation = 0;
 
-    // 將裁切好的圖片顯示在表單中
     const preview = document.getElementById('photoPreview');
     preview.src = compressedPhotoData;
     preview.style.display = 'block';
 
-    // 新增這兩行：裁切完顯示提示文字
     const reeditHint = document.getElementById('reeditHint');
-    if (reeditHint) reeditHint.style.display = 'block';
+    if (reeditHint) {
+        reeditHint.style.display = 'block';
+    }
 
-    // 顯示 AI 辨識按鈕
     document.getElementById('aiImageBtn').style.display = 'flex';
 }
 
@@ -398,55 +504,195 @@ function deleteCard(id, event) {
 }
 
 function renderCards() {
-    cardList.innerHTML = '';
-    const searchTerm = searchInput.value.toLowerCase();
+    if (!cardList || !searchInput) return;
 
-    // 取得排序條件 (若找不到選單則預設 newest)
+    cardList.innerHTML = '';
+
+    // 支援輸入多個關鍵字，例如：供應商 王小姐
+    const keywords = searchInput.value
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+
     const sortSelect = document.getElementById('sortSelect');
     const sortType = sortSelect ? sortSelect.value : 'newest';
 
     let filteredCards = businessCards.filter(card => {
-        return (card.name && card.name.toLowerCase().includes(searchTerm)) ||
-            (card.company && card.company.toLowerCase().includes(searchTerm));
+        const cardCategory = getCardCategory(card);
+
+        // 先檢查首頁點擊的分類篩選
+        if (
+            activeCategoryFilter &&
+            cardCategory !== activeCategoryFilter
+        ) {
+            return false;
+        }
+
+        // 可以搜尋所有主要欄位，包括標籤分類
+        const searchableText = [
+            cardCategory,
+            card.name,
+            card.company,
+            card.title,
+            card.phone,
+            card.mobile,
+            card.email,
+            card.address,
+            card.notes
+        ]
+            .map(value => String(value || '').toLowerCase())
+            .join(' ');
+
+        // 多個關鍵字必須全部符合
+        return keywords.every(keyword =>
+            searchableText.includes(keyword)
+        );
     });
 
-    // 執行排序邏輯
     if (sortType === 'oldest') {
         filteredCards.sort((a, b) => a.id - b.id);
     } else if (sortType === 'category') {
-        filteredCards.sort((a, b) => (a.category || '').localeCompare(b.category || ''));
+        filteredCards.sort((a, b) =>
+            getCardCategory(a).localeCompare(
+                getCardCategory(b),
+                'zh-TW'
+            )
+        );
     } else {
-        filteredCards.sort((a, b) => b.id - a.id); // 預設 newest
+        filteredCards.sort((a, b) => b.id - a.id);
+    }
+
+    updateActiveFilterUI(filteredCards.length);
+
+    if (filteredCards.length === 0) {
+        cardList.innerHTML = `
+            <div class="form-card"
+                 style="text-align:center; color:#888; padding:30px 20px;">
+                <span class="material-symbols-outlined"
+                      style="font-size:42px; color:#CBD5E0;">
+                    search_off
+                </span>
+                <p style="margin:10px 0 0;">
+                    找不到符合條件的名片
+                </p>
+            </div>
+        `;
+        return;
     }
 
     filteredCards.forEach(card => {
-        const photoHtml = card.photo ? `<img src="${card.photo}" style="width:70px; height:70px; object-fit:cover; border-radius:12px; margin-right:15px;">` : '';
+        const photoHtml = card.photo
+            ? `<img src="${card.photo}"
+                    style="width:70px;
+                           height:70px;
+                           object-fit:cover;
+                           border-radius:12px;
+                           margin-right:15px;">`
+            : '';
 
-        // ⭐ 新增：一鍵撥號與信箱 (Click-to-Action) 加上 event.stopPropagation() 防止觸發卡片編輯
-        const phoneHtml = card.phone ? `<a href="tel:${card.phone}" style="color:var(--accent-color); text-decoration:none; margin-right:15px;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">call</span> ${card.phone}</a>` : '';
-        const mobileHtml = card.mobile ? `<a href="tel:${card.mobile}" style="color:var(--accent-color); text-decoration:none; margin-right:15px;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">smartphone</span> ${card.mobile}</a>` : '';
-        const emailHtml = card.email ? `<a href="mailto:${card.email}" style="color:var(--accent-color); text-decoration:none;" onclick="event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px; vertical-align:text-bottom;">mail</span> Email</a>` : '';
-        const contactHtml = (phoneHtml || mobileHtml || emailHtml) ? `<div style="margin-top:8px; font-size:0.9rem; font-weight:bold; display:flex; flex-wrap:wrap; gap:8px;">${phoneHtml}${mobileHtml}${emailHtml}</div>` : '';
+        const phoneHtml = card.phone
+            ? `<a href="tel:${card.phone}"
+                  style="color:var(--accent-color);
+                         text-decoration:none;
+                         margin-right:15px;"
+                  onclick="event.stopPropagation()">
+                    <span class="material-symbols-outlined"
+                          style="font-size:16px;
+                                 vertical-align:text-bottom;">
+                        call
+                    </span>
+                    ${card.phone}
+               </a>`
+            : '';
+
+        const mobileHtml = card.mobile
+            ? `<a href="tel:${card.mobile}"
+                  style="color:var(--accent-color);
+                         text-decoration:none;
+                         margin-right:15px;"
+                  onclick="event.stopPropagation()">
+                    <span class="material-symbols-outlined"
+                          style="font-size:16px;
+                                 vertical-align:text-bottom;">
+                        smartphone
+                    </span>
+                    ${card.mobile}
+               </a>`
+            : '';
+
+        const emailHtml = card.email
+            ? `<a href="mailto:${card.email}"
+                  style="color:var(--accent-color);
+                         text-decoration:none;"
+                  onclick="event.stopPropagation()">
+                    <span class="material-symbols-outlined"
+                          style="font-size:16px;
+                                 vertical-align:text-bottom;">
+                        mail
+                    </span>
+                    Email
+               </a>`
+            : '';
+
+        const contactHtml =
+            phoneHtml || mobileHtml || emailHtml
+                ? `<div style="margin-top:8px;
+                               font-size:0.9rem;
+                               font-weight:bold;
+                               display:flex;
+                               flex-wrap:wrap;
+                               gap:8px;">
+                       ${phoneHtml}
+                       ${mobileHtml}
+                       ${emailHtml}
+                   </div>`
+                : '';
 
         const cardElement = document.createElement('div');
+
         cardElement.className = 'form-card';
         cardElement.style.display = 'flex';
         cardElement.style.alignItems = 'center';
         cardElement.style.cursor = 'pointer';
-        cardElement.onclick = () => viewCardDetails(card.id);
+
+        cardElement.onclick = () =>
+            viewCardDetails(card.id);
 
         cardElement.innerHTML = `
             ${photoHtml}
-            <div style="flex:1;">
-                <span class="badge">${card.category || '未分類'}</span>
-                <h3 style="margin:5px 0 2px 0; color:var(--primary-color);">${card.name}</h3>
-                <p style="margin:0; font-size:0.85rem; color:#888;">${card.company}</p>
+
+            <div style="flex:1; min-width:0;">
+                <span class="badge">
+                    ${getCardCategory(card)}
+                </span>
+
+                <h3 style="margin:5px 0 2px 0;
+                           color:var(--primary-color);">
+                    ${card.name || '未命名'}
+                </h3>
+
+                <p style="margin:0;
+                          font-size:0.85rem;
+                          color:#888;">
+                    ${card.company || '未填寫公司'}
+                </p>
+
                 ${contactHtml}
             </div>
-            <button onclick="deleteCard(${card.id}, event)" style="background:transparent; border:none; color:#FF6B6B; cursor:pointer; padding: 10px;">
-                <span class="material-symbols-outlined">delete</span>
+
+            <button onclick="deleteCard(${card.id}, event)"
+                    style="background:transparent;
+                           border:none;
+                           color:#FF6B6B;
+                           cursor:pointer;
+                           padding:10px;">
+                <span class="material-symbols-outlined">
+                    delete
+                </span>
             </button>
         `;
+
         cardList.appendChild(cardElement);
     });
 }
@@ -636,35 +882,42 @@ function addCategory() {
 
     renderCategoryOptions();
     renderCategoryTags();
+    renderCategoryStats();
 }
 
 // 4. 刪除分類
 function deleteCategory(cat) {
     if (cat === '未分類') return;
 
-    if (confirm(`確定要刪除「${cat}」分類嗎？\n(原本屬於此分類的名片，將會自動被歸為「未分類」)`)) {
-        // 從陣列移除並存檔
-        categories = categories.filter(c => c !== cat);
-        localStorage.setItem('categories', JSON.stringify(categories));
+    const confirmed = confirm(
+        `確定要刪除「${cat}」分類嗎？\n` +
+        `(原本屬於此分類的名片，將會自動被歸為「未分類」)`
+    );
 
-        // 將現有被刪除分類的名片，洗回「未分類」
-        let modified = false;
-        businessCards.forEach(card => {
-            if (card.category === cat) {
-                card.category = '未分類';
-                modified = true;
-            }
-        });
+    if (!confirmed) return;
 
-        // 如果有名片被修改到，就重新存檔並刷新列表
-        if (modified) {
-            localStorage.setItem('cards', JSON.stringify(businessCards));
-            renderCards();
+    // 刪除分類
+    categories = categories.filter(category => category !== cat);
+
+    // 原本屬於該分類的名片移至未分類
+    businessCards.forEach(card => {
+        if (getCardCategory(card) === cat) {
+            card.category = '未分類';
         }
+    });
 
-        renderCategoryOptions();
-        renderCategoryTags();
+    // 如果名片庫目前正在看這個分類，就清除篩選
+    if (activeCategoryFilter === cat) {
+        activeCategoryFilter = null;
     }
+
+    localStorage.setItem('categories', JSON.stringify(categories));
+    localStorage.setItem('cards', JSON.stringify(businessCards));
+
+    renderCategoryOptions();
+    renderCategoryTags();
+    renderCategoryStats();
+    renderCards();
 }
 
 // ==========================================
