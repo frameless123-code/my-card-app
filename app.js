@@ -1,9 +1,11 @@
 // ==========================================
 // 全域變數與初始化
 // ==========================================
-let businessCards = JSON.parse(localStorage.getItem('cards')) || [];
+let businessCards = [];
 let editingId = null;
 let compressedPhotoData = "";
+let compressedPhotoBlob = null;
+let previewObjectUrl = "";
 let originalPhotoData = ""; // 新增這行：用來記錄未裁切的原始高畫質圖片
 let cropper = null; // 新增 Cropper 全域變數
 // 目前在名片庫套用的分類篩選；null 代表顯示全部
@@ -64,6 +66,64 @@ function createCropper(imageElement) {
 
         toggleDragModeOnDblclick: false
     });
+}
+
+
+// ==========================================
+// IndexedDB 與圖片 URL 管理
+// ==========================================
+function revokePreviewObjectUrl() {
+    if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = "";
+    }
+}
+
+function releaseCardPhotoUrls() {
+    businessCards.forEach(card => {
+        if (card.photoUrl) URL.revokeObjectURL(card.photoUrl);
+    });
+}
+
+async function loadCardsFromDatabase() {
+    releaseCardPhotoUrls();
+
+    const storedCards = await CardDB.getAllCards();
+    businessCards = storedCards
+        .map(card => ({
+            ...card,
+            photoUrl: card.photoBlob
+                ? URL.createObjectURL(card.photoBlob)
+                : ""
+        }))
+        .sort((a, b) => (b.id || 0) - (a.id || 0));
+}
+
+function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.78) {
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => {
+            if (blob) {
+                resolve(blob);
+            } else {
+                reject(new Error('圖片壓縮失敗。'));
+            }
+        }, type, quality);
+    });
+}
+
+function showPhotoPreviewFromBlob(blob) {
+    const preview = document.getElementById('photoPreview');
+    revokePreviewObjectUrl();
+
+    if (!blob) {
+        preview.removeAttribute('src');
+        preview.style.display = 'none';
+        return;
+    }
+
+    previewObjectUrl = URL.createObjectURL(blob);
+    preview.src = previewObjectUrl;
+    preview.style.display = 'block';
 }
 
 // 取得自訂分類，若無則提供預設值
@@ -226,7 +286,7 @@ function renderRecentCards() {
 
     recentCards.forEach(card => {
         const defaultImg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjZWVlIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIvPjwvc3ZnPg==';
-        const imgSrc = card.photo || defaultImg;
+        const imgSrc = card.photoUrl || defaultImg;
 
         const cardHtml = `
             <div class="swipe-card" onclick="viewCardDetails(${card.id})">
@@ -294,35 +354,38 @@ function cancelCrop() {
     cropRotation = 0;
 }
 
-function confirmCrop() {
+async function confirmCrop() {
     if (!cropper) return;
 
-    const canvas = cropper.getCroppedCanvas({
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageSmoothingEnabled: true,
-        imageSmoothingQuality: 'high',
-        fillColor: '#ffffff'
-    });
+    try {
+        const canvas = cropper.getCroppedCanvas({
+            maxWidth: 1200,
+            maxHeight: 1200,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+            fillColor: '#ffffff'
+        });
 
-    compressedPhotoData = canvas.toDataURL('image/jpeg', 0.85);
+        if (!canvas) throw new Error('無法取得裁切圖片。');
 
-    closeCropperModal();
+        compressedPhotoBlob = await canvasToBlob(canvas, 'image/jpeg', 0.78);
+        compressedPhotoData = "";
 
-    cropper.destroy();
-    cropper = null;
-    cropRotation = 0;
+        closeCropperModal();
+        cropper.destroy();
+        cropper = null;
+        cropRotation = 0;
 
-    const preview = document.getElementById('photoPreview');
-    preview.src = compressedPhotoData;
-    preview.style.display = 'block';
+        showPhotoPreviewFromBlob(compressedPhotoBlob);
 
-    const reeditHint = document.getElementById('reeditHint');
-    if (reeditHint) {
-        reeditHint.style.display = 'block';
+        const reeditHint = document.getElementById('reeditHint');
+        if (reeditHint) reeditHint.style.display = 'block';
+
+        document.getElementById('aiImageBtn').style.display = 'flex';
+    } catch (error) {
+        console.error('裁切圖片失敗：', error);
+        alert('❌ 圖片裁切失敗，請重新選取圖片。');
     }
-
-    document.getElementById('aiImageBtn').style.display = 'flex';
 }
 
 // 新增這個函數：點擊預覽圖時重新打開裁切器
@@ -346,7 +409,6 @@ function prepareAddCard() {
     editingId = null;
     form.reset();
 
-    // ⭐ 修改重點：手動清空每一個欄位的值，確保沒有上次修改的殘留
     document.getElementById('category').value = '未分類';
     document.getElementById('company').value = '';
     document.getElementById('name').value = '';
@@ -357,20 +419,24 @@ function prepareAddCard() {
     document.getElementById('address').value = '';
     document.getElementById('notes').value = '';
 
-    document.getElementById('photoPreview').style.display = 'none';
+    revokePreviewObjectUrl();
+    const preview = document.getElementById('photoPreview');
+    preview.removeAttribute('src');
+    preview.style.display = 'none';
 
     const reeditHint = document.getElementById('reeditHint');
     if (reeditHint) reeditHint.style.display = 'none';
+
     originalPhotoData = "";
+    compressedPhotoData = "";
+    compressedPhotoBlob = null;
 
     document.getElementById('photoInput').value = "";
-    compressedPhotoData = "";
-
     document.getElementById('submitBtn').innerHTML = '<span class="material-symbols-outlined">save</span> 儲存名片';
     document.getElementById('aiImageBtn').style.display = 'none';
 }
 
-function editCard(id) {
+async function editCard(id) {
     const card = businessCards.find(c => c.id === id);
     if (!card) return;
 
@@ -385,21 +451,25 @@ function editCard(id) {
     document.getElementById('address').value = card.address || '';
     document.getElementById('notes').value = card.notes || '';
 
-    // ✅ 將舊照片資料一併指派給 compressedPhotoData，讓 AI 有圖可讀
-    compressedPhotoData = card.photo || "";
-    originalPhotoData = card.photo || "";
+    compressedPhotoBlob = card.photoBlob || null;
+    compressedPhotoData = "";
+    originalPhotoData = card.photoBlob
+        ? await CardDB.blobToDataUrl(card.photoBlob)
+        : "";
 
+    revokePreviewObjectUrl();
     const preview = document.getElementById('photoPreview');
-    const reeditHint = document.getElementById('reeditHint'); // 新增這行
+    const reeditHint = document.getElementById('reeditHint');
 
-    if (card.photo) {
-        preview.src = card.photo;
+    if (card.photoUrl) {
+        preview.src = card.photoUrl;
         preview.style.display = 'block';
-        if (reeditHint) reeditHint.style.display = 'block'; // 新增這行
+        if (reeditHint) reeditHint.style.display = 'block';
         document.getElementById('aiImageBtn').style.display = 'flex';
     } else {
+        preview.removeAttribute('src');
         preview.style.display = 'none';
-        if (reeditHint) reeditHint.style.display = 'none'; // 新增這行
+        if (reeditHint) reeditHint.style.display = 'none';
         document.getElementById('aiImageBtn').style.display = 'none';
     }
 
@@ -416,7 +486,7 @@ function viewCardDetails(id) {
 
     // 處理沒有照片時的預設圖
     const defaultImg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjZWVlIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIvPjwvc3ZnPg==';
-    const imgSrc = card.photo || defaultImg;
+    const imgSrc = card.photoUrl || defaultImg;
 
     // 準備詳細資料的 HTML
     const content = `
@@ -447,59 +517,67 @@ function viewCardDetails(id) {
 // ==========================================
 // 儲存、刪除與列表渲染
 // ==========================================
-form.addEventListener('submit', function (event) {
+form.addEventListener('submit', async function (event) {
     event.preventDefault();
+
+    const submitBtn = document.getElementById('submitBtn');
+    const existingCard = editingId
+        ? businessCards.find(card => card.id === editingId)
+        : null;
+    const now = Date.now();
+
     const cardData = {
+        id: editingId || now,
         category: document.getElementById('category').value,
-        company: document.getElementById('company').value,
-        name: document.getElementById('name').value,
-        title: document.getElementById('title').value,
-        phone: document.getElementById('phone').value,
-        mobile: document.getElementById('mobile').value,
-        email: document.getElementById('email').value,
-        address: document.getElementById('address').value,
-        notes: document.getElementById('notes').value,
-        photo: compressedPhotoData
+        company: document.getElementById('company').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        title: document.getElementById('title').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        mobile: document.getElementById('mobile').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        address: document.getElementById('address').value.trim(),
+        notes: document.getElementById('notes').value.trim(),
+        photoBlob: compressedPhotoBlob || existingCard?.photoBlob || null,
+        createdAt: existingCard?.createdAt || now,
+        updatedAt: now
     };
 
-    let successMessage = ""; // 準備成功訊息
+    const successMessage = editingId ? '✅ 更新成功！' : '✅ 儲存成功！';
 
-    if (editingId) {
-        const index = businessCards.findIndex(card => card.id === editingId);
-        if (index !== -1) {
-            if (!compressedPhotoData) cardData.photo = businessCards[index].photo;
-            businessCards[index] = { ...businessCards[index], ...cardData };
-        }
-        successMessage = '✅ 更新成功！';
-    } else {
-        cardData.id = Date.now();
-        businessCards.unshift(cardData);
-        successMessage = '✅ 儲存成功！';
-    }
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> 儲存中...';
 
-    try { localStorage.setItem('cards', JSON.stringify(businessCards)); } catch (e) { alert("⚠️ 空間不足！"); }
-    renderCards();
+    try {
+        await CardDB.putCard(cardData);
+        await loadCardsFromDatabase();
 
-    // ⭐ 修改重點：先清空表單與切換頁面，最後再跳提示
-    prepareAddCard();
-    switchTab('home');
-
-    // 使用 setTimeout 讓 UI 有時間完成跳轉渲染，避免畫面卡死
-    setTimeout(() => {
+        prepareAddCard();
+        switchTab('home');
         alert(successMessage);
-    }, 100);
+    } catch (error) {
+        console.error('IndexedDB 儲存失敗：', error);
+        alert('❌ 名片儲存失敗，請確認瀏覽器仍有可用空間。');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = editingId
+            ? '<span class="material-symbols-outlined">update</span> 更新名片'
+            : '<span class="material-symbols-outlined">save</span> 儲存名片';
+    }
 });
 
-function deleteCard(id, event) {
-    if (event) event.stopPropagation(); // 防止點擊刪除時觸發卡片編輯
-    if (confirm("確定刪除這張名片？")) {
-        businessCards = businessCards.filter(card => card.id !== id);
-        localStorage.setItem('cards', JSON.stringify(businessCards));
+async function deleteCard(id, event) {
+    if (event) event.stopPropagation();
+    if (!confirm('確定刪除這張名片？')) return;
+
+    try {
+        await CardDB.deleteCard(id);
+        await loadCardsFromDatabase();
         renderCards();
-        if (document.getElementById('view-home').classList.contains('active')) {
-            renderRecentCards();
-            updateHomeCount();
-        }
+        renderRecentCards();
+        updateHomeCount();
+    } catch (error) {
+        console.error('刪除名片失敗：', error);
+        alert('❌ 刪除失敗，請稍後再試。');
     }
 }
 
@@ -582,8 +660,8 @@ function renderCards() {
     }
 
     filteredCards.forEach(card => {
-        const photoHtml = card.photo
-            ? `<img src="${card.photo}"
+        const photoHtml = card.photoUrl
+            ? `<img src="${card.photoUrl}"
                     style="width:70px;
                            height:70px;
                            object-fit:cover;
@@ -716,17 +794,18 @@ function saveSettings() {
 async function recognizeCardWithAI() {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) return alert('⚠️ 請先到「設定」輸入 API Key！');
-    if (!compressedPhotoData) return alert('⚠️ 找不到名片影像，請重新上傳或拍攝！');
+    if (!compressedPhotoBlob) return alert('⚠️ 找不到名片影像，請重新上傳或拍攝！');
     const btn = document.getElementById('aiImageBtn');
     btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> 讀取中...';
 
     // 定義要依序嘗試的模型清單 (優先順序：由上到下)
     const modelsToTry = [
-        'gemini-3.5-flash-lite',      
-        'gemini-3.1-flash-lite'  
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite'
     ];
 
-    const base64Image = compressedPhotoData.split(',')[1];
+    const imageDataUrl = compressedPhotoData || await CardDB.blobToDataUrl(compressedPhotoBlob);
+    const base64Image = imageDataUrl.split(',')[1];
     const payload = {
         contents: [{
             parts: [
@@ -780,7 +859,7 @@ async function parseTextWithAI() {
 
     const modelsToTry = [
         'gemini-3.5-flash-lite',
-        'gemini-3.1-flash-lite'  
+        'gemini-3.1-flash-lite'
     ];
 
     const payload = {
@@ -886,63 +965,89 @@ function addCategory() {
 }
 
 // 4. 刪除分類
-function deleteCategory(cat) {
+async function deleteCategory(cat) {
     if (cat === '未分類') return;
 
     const confirmed = confirm(
         `確定要刪除「${cat}」分類嗎？\n` +
-        `(原本屬於此分類的名片，將會自動被歸為「未分類」)`
+        '(原本屬於此分類的名片，將會自動被歸為「未分類」)'
     );
 
     if (!confirmed) return;
 
-    // 刪除分類
-    categories = categories.filter(category => category !== cat);
+    try {
+        categories = categories.filter(category => category !== cat);
 
-    // 原本屬於該分類的名片移至未分類
-    businessCards.forEach(card => {
-        if (getCardCategory(card) === cat) {
-            card.category = '未分類';
+        businessCards.forEach(card => {
+            if (getCardCategory(card) === cat) {
+                card.category = '未分類';
+                card.updatedAt = Date.now();
+            }
+        });
+
+        if (activeCategoryFilter === cat) {
+            activeCategoryFilter = null;
         }
-    });
 
-    // 如果名片庫目前正在看這個分類，就清除篩選
-    if (activeCategoryFilter === cat) {
-        activeCategoryFilter = null;
+        localStorage.setItem('categories', JSON.stringify(categories));
+        await CardDB.putCards(businessCards);
+        await loadCardsFromDatabase();
+
+        renderCategoryOptions();
+        renderCategoryTags();
+        renderCategoryStats();
+        renderCards();
+    } catch (error) {
+        console.error('刪除分類失敗：', error);
+        alert('❌ 分類刪除失敗，請稍後再試。');
     }
-
-    localStorage.setItem('categories', JSON.stringify(categories));
-    localStorage.setItem('cards', JSON.stringify(businessCards));
-
-    renderCategoryOptions();
-    renderCategoryTags();
-    renderCategoryStats();
-    renderCards();
 }
 
 // ==========================================
 // ⭐ 新增：資料備份與還原 (匯出/匯入 JSON)
 // ==========================================
-function exportData() {
+async function exportData() {
     if (businessCards.length === 0) {
         return alert('⚠️ 目前沒有名片資料可以備份喔！');
     }
 
-    // 將陣列轉為 JSON 字串，並建立 Blob 檔案物件
-    const dataStr = JSON.stringify(businessCards);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    try {
+        const cardsForExport = await Promise.all(
+            businessCards.map(async card => {
+                const { photoBlob, photoUrl, ...textData } = card;
 
-    // 建立隱藏的下載連結並自動點擊
-    const a = document.createElement('a');
-    a.href = url;
-    const date = new Date().toISOString().slice(0, 10); // 取得當前日期
-    a.download = `名片備份_${date}.json`;
+                return {
+                    ...textData,
+                    photo: photoBlob
+                        ? await CardDB.blobToDataUrl(photoBlob)
+                        : ''
+                };
+            })
+        );
 
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+        const backup = {
+            version: 2,
+            exportedAt: new Date().toISOString(),
+            categories,
+            cards: cardsForExport
+        };
+
+        const dataStr = JSON.stringify(backup);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        const date = new Date().toISOString().slice(0, 10);
+
+        anchor.href = url;
+        anchor.download = `名片備份_${date}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('匯出備份失敗：', error);
+        alert('❌ 備份匯出失敗。');
+    }
 }
 
 function importData(event) {
@@ -950,55 +1055,93 @@ function importData(event) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+
+    reader.onload = async function (e) {
         try {
-            const importedCards = JSON.parse(e.target.result);
+            const parsed = JSON.parse(e.target.result);
+            const importedCards = Array.isArray(parsed)
+                ? parsed
+                : parsed.cards;
+            const importedCategories = Array.isArray(parsed.categories)
+                ? parsed.categories
+                : [];
 
-            // 簡單防呆：確認匯入的是不是陣列格式
-            if (!Array.isArray(importedCards)) throw new Error("檔案格式錯誤");
-
-            // 如果原本已經有名片，詢問要合併還是覆蓋
-            if (businessCards.length > 0) {
-                const confirmMerge = confirm("要將匯入的資料與現有的名片「合併」嗎？\n(按「確定」合併，按「取消」則清空現有資料並完全覆蓋)");
-                if (confirmMerge) {
-                    const existingIds = new Set(businessCards.map(c => c.id));
-                    importedCards.forEach(card => {
-                        if (!existingIds.has(card.id)) businessCards.push(card);
-                    });
-                } else {
-                    businessCards = importedCards;
-                }
-            } else {
-                businessCards = importedCards;
+            if (!Array.isArray(importedCards)) {
+                throw new Error('備份檔案沒有 cards 陣列。');
             }
 
-            // ⭐ 新增：自動掃描並建立缺失的分類標籤
-            importedCards.forEach(card => {
+            const shouldMerge = businessCards.length > 0
+                ? confirm(
+                    '要將匯入的資料與現有名片「合併」嗎？\n' +
+                    '按「確定」合併；按「取消」會清空現有資料後覆蓋。'
+                )
+                : true;
+
+            const existingIds = new Set(
+                shouldMerge ? businessCards.map(card => card.id) : []
+            );
+            const normalizedCards = [];
+
+            for (const importedCard of importedCards) {
+                const card = { ...importedCard };
+                const id = Number(card.id) || Date.now() + normalizedCards.length;
+
+                if (shouldMerge && existingIds.has(id)) continue;
+
+                const photoBlob = card.photo
+                    ? CardDB.dataUrlToBlob(card.photo)
+                    : null;
+
+                delete card.photo;
+                delete card.photoUrl;
+
+                normalizedCards.push({
+                    ...card,
+                    id,
+                    category: card.category || '未分類',
+                    photoBlob,
+                    createdAt: card.createdAt || id,
+                    updatedAt: Date.now()
+                });
+                existingIds.add(id);
+            }
+
+            if (!shouldMerge) {
+                await CardDB.clearCards();
+            }
+
+            await CardDB.putCards(normalizedCards);
+
+            importedCategories.forEach(category => {
+                if (category && !categories.includes(category)) {
+                    categories.push(category);
+                }
+            });
+
+            normalizedCards.forEach(card => {
                 if (card.category && !categories.includes(card.category)) {
                     categories.push(card.category);
                 }
             });
 
-            // 儲存所有更新到 localStorage
-            localStorage.setItem('cards', JSON.stringify(businessCards));
-            localStorage.setItem('categories', JSON.stringify(categories)); // 儲存更新後的分類
+            localStorage.setItem('categories', JSON.stringify(categories));
+            await loadCardsFromDatabase();
 
-            // 重新渲染畫面上的所有元素
             renderCards();
             updateHomeCount();
-            renderCategoryOptions(); // 刷新表單下拉選單
-            renderCategoryTags();    // 刷新設定頁面標籤列表
+            renderRecentCards();
+            renderCategoryOptions();
+            renderCategoryTags();
 
-            if (document.getElementById('view-home').classList.contains('active')) renderRecentCards();
-
-            alert('✅ 備份資料與分類標籤還原成功！');
+            alert(`✅ 已還原 ${normalizedCards.length} 張名片！`);
         } catch (error) {
+            console.error('還原備份失敗：', error);
             alert('❌ 檔案格式不正確，還原失敗！');
-            console.error(error);
         } finally {
             event.target.value = '';
         }
     };
+
     reader.readAsText(file);
 }
 
@@ -1043,10 +1186,31 @@ function exportCSV() {
 }
 
 // 啟動載入
+async function initializeApp() {
+    try {
+        await CardDB.openDatabase();
 
-renderCategoryOptions(); // 加入這行
-renderCategoryTags();    // 加入這行
+        // 新架構不再使用 localStorage 儲存名片。
+        localStorage.removeItem('cards');
 
-renderCards();
-renderRecentCards();
-updateHomeCount();
+        // 嘗試降低瀏覽器自動清除資料的可能性。
+        await CardDB.requestPersistentStorage();
+        await loadCardsFromDatabase();
+
+        renderCategoryOptions();
+        renderCategoryTags();
+        renderCards();
+        renderRecentCards();
+        updateHomeCount();
+    } catch (error) {
+        console.error('APP 初始化失敗：', error);
+        alert('❌ 無法開啟名片資料庫，請確認瀏覽器允許網站儲存資料。');
+    }
+}
+
+window.addEventListener('beforeunload', () => {
+    releaseCardPhotoUrls();
+    revokePreviewObjectUrl();
+});
+
+initializeApp();
