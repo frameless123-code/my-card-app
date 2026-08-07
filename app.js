@@ -185,6 +185,11 @@ function restoreCardListScroll() {
     });
 }
 
+function openCategoryManager() {
+    renderCategoryManager();
+    switchTab('category-manage');
+}
+
 function switchTab(tabId, options = {}) {
     const restoreScroll = options.restoreScroll === true;
 
@@ -1135,6 +1140,209 @@ async function deleteCategory(cat) {
         console.error('刪除分類失敗：', error);
         alert('❌ 分類刪除失敗，請稍後再試。');
     }
+}
+
+//標籤管理畫面產生函式
+function renderCategoryManager() {
+    const container =
+        document.getElementById('category-manager-list');
+
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    categories.forEach((category, index) => {
+
+        const count = businessCards.filter(card =>
+            getCardCategory(card) === category
+        ).length;
+
+        const row = document.createElement('div');
+
+        row.style.cssText = `
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            padding:12px 0;
+            border-bottom:1px solid #EDF2F7;
+        `;
+
+
+        // 左邊：名稱 + 人數
+        const info = document.createElement('div');
+
+        info.style.cssText = `
+            flex:1;
+            min-width:0;
+        `;
+
+        const name = document.createElement('div');
+        name.textContent = category;
+
+        name.style.cssText = `
+            color:var(--primary-color);
+            font-weight:700;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        `;
+
+        const countText = document.createElement('div');
+        countText.textContent = `${count} 位聯絡人`;
+
+        countText.style.cssText = `
+            color:#999;
+            font-size:0.78rem;
+            margin-top:3px;
+        `;
+
+        info.appendChild(name);
+        info.appendChild(countText);
+
+
+        // 右邊操作按鈕
+        const actions = document.createElement('div');
+
+        actions.style.cssText = `
+            display:flex;
+            align-items:center;
+            gap:5px;
+            flex-shrink:0;
+        `;
+
+
+        // 未分類固定第一個，不移動、不改名
+        const isSystemCategory =
+            category === '未分類';
+
+
+        // 上移
+        const upButton =
+            createCategoryActionButton(
+                'arrow_upward',
+                '上移'
+            );
+
+        upButton.disabled =
+            isSystemCategory ||
+            index <= 1;
+
+        upButton.onclick = () =>
+            moveCategory(category, -1);
+
+
+        // 下移
+        const downButton =
+            createCategoryActionButton(
+                'arrow_downward',
+                '下移'
+            );
+
+        downButton.disabled =
+            isSystemCategory ||
+            index === categories.length - 1;
+
+        downButton.onclick = () =>
+            moveCategory(category, 1);
+
+
+        // 修改名稱
+        const renameButton =
+            createCategoryActionButton(
+                'edit',
+                '修改名稱'
+            );
+
+        renameButton.disabled =
+            isSystemCategory;
+
+        renameButton.onclick = () =>
+            renameCategory(category);
+
+
+        actions.appendChild(upButton);
+        actions.appendChild(downButton);
+        actions.appendChild(renameButton);
+
+        row.appendChild(info);
+        row.appendChild(actions);
+
+        container.appendChild(row);
+    });
+
+
+    renderMergeCategoryOptions();
+}
+
+//產生小按鈕的函式
+function createCategoryActionButton(icon, title) {
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.title = title;
+
+    button.style.cssText = `
+        width:38px;
+        height:38px;
+        border:none;
+        border-radius:10px;
+        background:#F0F4F8;
+        color:var(--primary-color);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        cursor:pointer;
+    `;
+
+    const iconElement =
+        document.createElement('span');
+
+    iconElement.className =
+        'material-symbols-outlined';
+
+    iconElement.textContent = icon;
+    iconElement.style.fontSize = '19px';
+
+    button.appendChild(iconElement);
+
+    return button;
+}
+
+function moveCategory(category, direction) {
+    const currentIndex =
+        categories.indexOf(category);
+
+    if (currentIndex === -1) return;
+
+    const targetIndex =
+        currentIndex + direction;
+
+    // 未分類固定在第一位
+    if (
+        targetIndex < 1 ||
+        targetIndex >= categories.length
+    ) {
+        return;
+    }
+
+    [
+        categories[currentIndex],
+        categories[targetIndex]
+    ] = [
+            categories[targetIndex],
+            categories[currentIndex]
+        ];
+
+    localStorage.setItem(
+        'categories',
+        JSON.stringify(categories)
+    );
+
+    renderCategoryManager();
+    renderCategoryOptions();
+    renderCategoryTags();
+    renderCategoryStats();
 }
 
 // ==========================================
