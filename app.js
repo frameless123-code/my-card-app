@@ -1254,12 +1254,8 @@ function renderCategoryManager() {
                 '修改名稱'
             );
 
-        renameButton.disabled =
-            isSystemCategory;
-
-        renameButton.onclick = () =>
-            renameCategory(category);
-
+        // 目前先不開放，等第 8 步再做
+        renameButton.disabled = true;
 
         actions.appendChild(upButton);
         actions.appendChild(downButton);
@@ -1272,7 +1268,7 @@ function renderCategoryManager() {
     });
 
 
-    renderMergeCategoryOptions();
+    //renderMergeCategoryOptions();
 }
 
 //產生小按鈕的函式
