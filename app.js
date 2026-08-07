@@ -158,6 +158,11 @@ if (apiKeyInput) {
 // ==========================================
 // UI 切換與儀表板更新
 // ==========================================
+function openCategoryManager() {
+    renderCategoryManager();
+    switchTab('category-manage');
+}
+
 // 切換頁面後回到最上方
 function scrollPageToTop() {
     requestAnimationFrame(() => {
@@ -183,11 +188,6 @@ function restoreCardListScroll() {
             });
         });
     });
-}
-
-function openCategoryManager() {
-    renderCategoryManager();
-    switchTab('category-manage');
 }
 
 function switchTab(tabId, options = {}) {
