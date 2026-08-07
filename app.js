@@ -1254,8 +1254,12 @@ function renderCategoryManager() {
                 '修改名稱'
             );
 
-        // 目前先不開放，等第 8 步再做
-        renameButton.disabled = true;
+        // 「未分類」不能改名
+        renameButton.disabled =
+            isSystemCategory;
+
+        renameButton.onclick = () =>
+            renameCategory(category);
 
         actions.appendChild(upButton);
         actions.appendChild(downButton);
@@ -1268,7 +1272,7 @@ function renderCategoryManager() {
     });
 
 
-    //renderMergeCategoryOptions();
+    renderMergeCategoryOptions();
 }
 
 //產生小按鈕的函式
@@ -1339,6 +1343,292 @@ function moveCategory(category, direction) {
     renderCategoryOptions();
     renderCategoryTags();
     renderCategoryStats();
+}
+
+// ==========================================
+// 修改標籤名稱
+// ==========================================
+async function renameCategory(oldName) {
+    if (oldName === '未分類') {
+        return;
+    }
+
+    const input = prompt(
+        '請輸入新的標籤名稱：',
+        oldName
+    );
+
+    // 使用者按取消
+    if (input === null) return;
+
+    const newName = input.trim();
+
+    if (!newName) {
+        alert('⚠️ 標籤名稱不能是空白。');
+        return;
+    }
+
+    if (newName === oldName) {
+        return;
+    }
+
+    if (categories.includes(newName)) {
+        alert(
+            '⚠️ 已經有相同名稱的標籤。\n' +
+            '如果想把兩個標籤整合，請使用「合併標籤」。'
+        );
+        return;
+    }
+
+    try {
+        const categoryIndex =
+            categories.indexOf(oldName);
+
+        if (categoryIndex === -1) {
+            return;
+        }
+
+        // 修改分類清單名稱
+        categories[categoryIndex] = newName;
+
+        // 同步修改所有屬於舊分類的名片
+        businessCards.forEach(card => {
+            if (getCardCategory(card) === oldName) {
+                card.category = newName;
+                card.updatedAt = Date.now();
+            }
+        });
+
+        // 如果目前名片庫剛好正在篩選舊分類，也一起換掉
+        if (activeCategoryFilter === oldName) {
+            activeCategoryFilter = newName;
+        }
+
+        // 儲存分類清單
+        localStorage.setItem(
+            'categories',
+            JSON.stringify(categories)
+        );
+
+        // 儲存修改後的名片
+        await CardDB.putCards(businessCards);
+
+        // 重新從 IndexedDB 載入
+        await loadCardsFromDatabase();
+
+        // 更新所有畫面
+        renderCategoryManager();
+        renderCategoryOptions();
+        renderCategoryTags();
+        renderCategoryStats();
+        renderCards();
+        renderRecentCards();
+
+        alert(
+            `✅ 已將「${oldName}」修改為「${newName}」`
+        );
+
+    } catch (error) {
+        console.error(
+            '修改標籤名稱失敗：',
+            error
+        );
+
+        alert('❌ 修改標籤名稱失敗。');
+    }
+}
+
+// ==========================================
+// 產生合併標籤下拉選單
+// ==========================================
+function renderMergeCategoryOptions() {
+    const sourceSelect =
+        document.getElementById(
+            'mergeSourceCategory'
+        );
+
+    const targetSelect =
+        document.getElementById(
+            'mergeTargetCategory'
+        );
+
+    if (!sourceSelect || !targetSelect) {
+        return;
+    }
+
+    sourceSelect.innerHTML = '';
+    targetSelect.innerHTML = '';
+
+    categories.forEach(category => {
+
+        // 「未分類」是系統分類，
+        // 不允許拿它當作被刪掉的來源
+        if (category !== '未分類') {
+            const sourceOption =
+                document.createElement('option');
+
+            sourceOption.value = category;
+            sourceOption.textContent = category;
+
+            sourceSelect.appendChild(
+                sourceOption
+            );
+        }
+
+        // 目標可以是任何分類，包括「未分類」
+        const targetOption =
+            document.createElement('option');
+
+        targetOption.value = category;
+        targetOption.textContent = category;
+
+        targetSelect.appendChild(
+            targetOption
+        );
+    });
+
+    // 如果有兩個以上分類，
+    // 預設讓來源與目標不要選到同一個
+    if (
+        sourceSelect.options.length > 0 &&
+        targetSelect.options.length > 1
+    ) {
+        const sourceValue =
+            sourceSelect.value;
+
+        const differentTarget =
+            categories.find(category =>
+                category !== sourceValue
+            );
+
+        if (differentTarget) {
+            targetSelect.value =
+                differentTarget;
+        }
+    }
+}
+
+// ==========================================
+// 合併標籤
+// ==========================================
+async function mergeCategories() {
+    const sourceSelect =
+        document.getElementById(
+            'mergeSourceCategory'
+        );
+
+    const targetSelect =
+        document.getElementById(
+            'mergeTargetCategory'
+        );
+
+    if (!sourceSelect || !targetSelect) {
+        return;
+    }
+
+    const source =
+        sourceSelect.value;
+
+    const target =
+        targetSelect.value;
+
+    if (!source || !target) {
+        alert('⚠️ 請選擇要合併的標籤。');
+        return;
+    }
+
+    if (source === target) {
+        alert(
+            '⚠️ 來源與目標不能是同一個標籤。'
+        );
+        return;
+    }
+
+    if (source === '未分類') {
+        alert(
+            '⚠️ 「未分類」是系統標籤，不能被合併刪除。'
+        );
+        return;
+    }
+
+    // 計算有幾張名片會被移動
+    const affectedCount =
+        businessCards.filter(card =>
+            getCardCategory(card) === source
+        ).length;
+
+    const confirmed = confirm(
+        `確定要合併標籤嗎？\n\n` +
+        `「${source}」 → 「${target}」\n\n` +
+        `${affectedCount} 張名片將移動到「${target}」。\n` +
+        `完成後「${source}」標籤會被刪除。`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        // 先把所有來源標籤的名片改成目標標籤
+        businessCards.forEach(card => {
+            if (
+                getCardCategory(card) === source
+            ) {
+                card.category = target;
+                card.updatedAt = Date.now();
+            }
+        });
+
+        // 刪除來源標籤
+        categories =
+            categories.filter(
+                category =>
+                    category !== source
+            );
+
+        // 如果名片庫目前正在看來源標籤，
+        // 改成顯示合併後的目標標籤
+        if (
+            activeCategoryFilter === source
+        ) {
+            activeCategoryFilter = target;
+        }
+
+        // 儲存標籤清單
+        localStorage.setItem(
+            'categories',
+            JSON.stringify(categories)
+        );
+
+        // 寫回 IndexedDB
+        await CardDB.putCards(
+            businessCards
+        );
+
+        await loadCardsFromDatabase();
+
+        // 更新所有 UI
+        renderCategoryManager();
+        renderCategoryOptions();
+        renderCategoryTags();
+        renderCategoryStats();
+        renderCards();
+        renderRecentCards();
+
+        alert(
+            `✅ 已將「${source}」合併到「${target}」`
+        );
+
+    } catch (error) {
+        console.error(
+            '合併標籤失敗：',
+            error
+        );
+
+        alert(
+            '❌ 標籤合併失敗，請重新整理後再試。'
+        );
+    }
 }
 
 // ==========================================
